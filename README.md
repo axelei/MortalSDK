@@ -37,6 +37,8 @@ Sólo necesitas ejecutar: `mvn clean package`
 - Mejorar la extracción de textos
 - Programar mi propio extractor y compresor de RNC para no necesitar rnc_propack_x64.exe
 - Internacionalizar los mensajes
+- Crear tests unitarios
+- Lanzar mejores alertas si hay inconsistencias y recuperación de errores
 
 ## Autoría y reconocimientos
 

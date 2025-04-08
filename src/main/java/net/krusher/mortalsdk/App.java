@@ -25,6 +25,8 @@ public class App {
 
     public static final String RNC = "rnc_propack_x64.exe";
 
+    private static final int CS_OFFS = 398; // 256 + 142
+
     public static void main( String[] args ) throws IOException, InterruptedException {
 
         System.out.println("MortalSDK by Krusher - Programa bajo licencia GPL 3");
@@ -72,9 +74,10 @@ public class App {
             System.out.println("No se encontraron archivos extraídos en la carpeta 'extracted'");
             System.exit(1);
         }
+        System.out.print("Inyectando:");
         for (File extractedFile : extractedFiles) {
             execute("rnc_propack_x64.exe", "p", "extracted\\" + extractedFile.getName(), "temp.bin");
-            System.out.println("Inyectando: " + extractedFile.getName());
+            System.out.print(" " + extractedFile.getName());
             String addressHex = extractedFile.getName().substring(5, 11);
             int addressDecimal = Integer.parseInt(addressHex, 16);
             byte[] compressedData = Files.readAllBytes(Paths.get("temp.bin"));
@@ -87,12 +90,50 @@ public class App {
         System.out.println("Inyectando textos...");
         List<Texticle> texticles = extractTexts(file);
         for (Texticle texticle : texticles) {
-            System.arraycopy(texticle.text().getBytes(StandardCharsets.ISO_8859_1), 0, fileData, texticle.address(), texticle.size());
+            System.arraycopy(texticle.toAsciiBytes(), 0, fileData, texticle.address(), texticle.size());
         }
-        System.out.println("Inyección terminada, escribiendo salida...");
+        System.out.println("Inyección terminada.");
+        System.out.println("Arreglando checksum...");
+        fixChecksum(fileData);
+        System.out.println("Escribiendo salida...");
         File outputFile = new File(file + ".patched.bin");
         Files.write(outputFile.toPath(), fileData);
         System.out.println("Salida escrita en: " + outputFile.getAbsolutePath());
+    }
+
+    private static void fixChecksum(byte[] romBytes) {
+
+        int prev_cs = readWord(romBytes, CS_OFFS);
+        System.out.printf("Checksum existente: 0x%04x%n", prev_cs);
+
+        int checksum = calculateChecksum(romBytes);
+        System.out.printf("Checksum válido: 0x%04x%n", checksum);
+
+        if (prev_cs != checksum) {
+            System.out.println("El checksum ha cambiado, arreglando...");
+
+            writeWord(romBytes, CS_OFFS, checksum);
+        } else {
+            System.out.println("¡El checksum no ha cambiado!");
+        }
+    }
+
+    private static int readWord(byte[] data, int offset) {
+        return ((data[offset] & 0xFF) << 8) | (data[offset + 1] & 0xFF);
+    }
+
+    private static void writeWord(byte[] data, int offset, int value) {
+        data[offset] = (byte) ((value >> 8) & 0xFF);
+        data[offset + 1] = (byte) (value & 0xFF);
+    }
+
+    private static int calculateChecksum(byte[] rom) {
+        int checksum = 0;
+        for (int i = 512; i + 1 < rom.length; i += 2) {
+            int word = ((rom[i] & 0xFF) << 8) | (rom[i + 1] & 0xFF);
+            checksum = (checksum + word) & 0xFFFF;
+        }
+        return checksum;
     }
 
     public static List<Texticle> extractTexts(String file) throws IOException {
@@ -175,14 +216,12 @@ public class App {
 
     public static void execute(String... parameters) throws IOException, InterruptedException {
         ProcessBuilder processBuilder = new ProcessBuilder(parameters);
-        processBuilder.inheritIO();
+        //processBuilder.inheritIO();
         Process process = processBuilder.start();
         int exitCode = process.waitFor();
         if (exitCode != 0) {
             System.out.println("Error al ejecutar el comando: " + exitCode);
             System.exit(exitCode);
-        } else {
-            System.out.println("Comando ejecutado correctamente");
         }
     }
 }
