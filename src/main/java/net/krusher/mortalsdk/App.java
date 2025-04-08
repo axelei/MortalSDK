@@ -59,9 +59,56 @@ public class App {
         System.out.println("Salida escrita en: " + file + ".txt");
     }
 
-    public static void inject(String file) {
+    public static void inject(String file) throws IOException, InterruptedException {
         System.out.println("Modo: Inyectar");
-        System.out.println("Archivo: " + file);
+        System.out.println("Leyendo archivo: " + file);
+        byte[] fileData = Files.readAllBytes(Paths.get(file));
+        System.out.println("Inyectando bloques...");
+        File extractedDir = new File("extracted");
+        File[] extractedFiles = extractedDir.listFiles();
+        if (extractedFiles == null || extractedFiles.length == 0) {
+            System.out.println("No se encontraron archivos extraídos en la carpeta 'extracted'");
+            System.exit(1);
+        }
+        for (File extractedFile : extractedFiles) {
+            execute("rnc_propack_x64.exe", "p", "extracted\\" + extractedFile.getName(), "temp.bin");
+            System.out.println("Inyectando: " + extractedFile.getName());
+            String addressHex = extractedFile.getName().substring(5, 11);
+            int addressDecimal = Integer.parseInt(addressHex, 16);
+            byte[] compressedData = Files.readAllBytes(Paths.get("temp.bin"));
+            System.arraycopy(compressedData, 0, fileData, addressDecimal, compressedData.length);
+        }
+        File tempFile = new File("temp.bin");
+        if (tempFile.exists()) {
+            tempFile.delete();
+        }
+        System.out.println("Inyectando textos...");
+        List<Texticle> texticles = extractTexts(file);
+        for (Texticle texticle : texticles) {
+            System.arraycopy(texticle.text().getBytes(StandardCharsets.ISO_8859_1), 0, fileData, texticle.address(), texticle.size());
+        }
+        System.out.println("Inyección terminada, escribiendo salida...");
+        File outputFile = new File(file + ".patched.bin");
+        Files.write(outputFile.toPath(), fileData);
+        System.out.println("Salida escrita en: " + outputFile.getAbsolutePath());
+    }
+
+    public static List<Texticle> extractTexts(String file) throws IOException {
+        List<String> lines = Files.readAllLines(Paths.get(file + ".txt"));
+        List<Texticle> texticles = new ArrayList<>();
+        for (String line : lines) {
+            String[] parts = line.split("#");
+            if (parts.length == 3) {
+                int address = Integer.parseInt(parts[0]);
+                int size = Integer.parseInt(parts[1]);
+                String text = parts[2];
+                if (text.length() > size) {
+                    text = text.substring(0, size);
+                }
+                texticles.add(new Texticle(address, size, text));
+            }
+        }
+        return texticles;
     }
 
     public static List<Texticle> extractTexts(byte[] fileData) {
