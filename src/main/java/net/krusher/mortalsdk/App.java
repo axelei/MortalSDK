@@ -27,6 +27,8 @@ public class App {
 
     public static void main( String[] args ) throws IOException, InterruptedException {
 
+        System.out.println("MortalSDK by Krusher - Programa bajo licencia GPL 3");
+
         //check parameters
         if (args.length != 2) {
             displayHelp();
