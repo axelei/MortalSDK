@@ -1,7 +1,6 @@
 package net.krusher.mortalsdk;
 
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -19,9 +18,9 @@ import java.util.Set;
  */
 public class App {
 
-    public static final byte[] TEXTSCHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ!'.,- ".getBytes(StandardCharsets.ISO_8859_1);
+    public static final byte[] TEXTSCHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ!:'.,- ".getBytes(StandardCharsets.ISO_8859_1);
     public static final int MIN_CHARS = 4;
-    public static final Set<ValueRange> RANGES = Set.of(
+    public static final Set<ValueRange> TEXTS_RANGES = Set.of(
             ValueRange.of(0, 3187513)
             );
 
@@ -29,9 +28,9 @@ public class App {
             ValueRange.of(2051263, 2063433) // Finish him
     );
 
-    public static final String RNC = "rnc_propack_x64.exe";
+    public static final String RNC_EXE = "rnc_propack_x64.exe";
 
-    private static final int CS_OFFS = 398; // 256 + 142
+    private static final int CHECKSUM_OFFSET = 398; // 256 + 142
 
     public static void main( String[] args ) throws IOException, InterruptedException {
 
@@ -61,7 +60,7 @@ public class App {
         System.out.println("Leyendo archivo: " + file);
         byte[] fileData = Files.readAllBytes(Paths.get(file));
         System.out.println("Extrayendo bloques...");
-        execute(RNC, "e", file);
+        execute(RNC_EXE, "e", file);
         System.out.println("Extrayendo datos sin comprimir...");
         extractUncompressedBlock(SOUNDS, "pcm", fileData);
         System.out.println("Extrayendo textos...");
@@ -135,7 +134,7 @@ public class App {
 
     private static void fixChecksum(byte[] romBytes) {
 
-        int prev_cs = readWord(romBytes, CS_OFFS);
+        int prev_cs = readWord(romBytes, CHECKSUM_OFFSET);
         System.out.printf("Checksum existente: 0x%04x%n", prev_cs);
 
         int checksum = calculateChecksum(romBytes);
@@ -144,7 +143,7 @@ public class App {
         if (prev_cs != checksum) {
             System.out.println("El checksum ha cambiado, arreglando...");
 
-            writeWord(romBytes, CS_OFFS, checksum);
+            writeWord(romBytes, CHECKSUM_OFFSET, checksum);
         } else {
             System.out.println("¡El checksum no ha cambiado!");
         }
@@ -224,7 +223,7 @@ public class App {
     }
 
     public static boolean inRange(int i) {
-        for (ValueRange range : RANGES) {
+        for (ValueRange range : TEXTS_RANGES) {
             if (range.isValidIntValue(i)) {
                 return true;
             }
