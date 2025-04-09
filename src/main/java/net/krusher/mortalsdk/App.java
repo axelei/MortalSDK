@@ -260,7 +260,10 @@ public class App {
 
     public static void execute(String... parameters) throws IOException, InterruptedException {
         ProcessBuilder processBuilder = new ProcessBuilder(parameters);
-        processBuilder.inheritIO();
+        processBuilder
+                .redirectInput(ProcessBuilder.Redirect.INHERIT)
+                .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+                .redirectError(ProcessBuilder.Redirect.INHERIT);
         Process process = processBuilder.start();
         int exitCode = process.waitFor();
         if (exitCode != 0) {
