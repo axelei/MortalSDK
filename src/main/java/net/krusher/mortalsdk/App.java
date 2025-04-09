@@ -1,6 +1,8 @@
 package net.krusher.mortalsdk;
 
 import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -22,6 +24,10 @@ public class App {
     public static final Set<ValueRange> RANGES = Set.of(
             ValueRange.of(0, 3187513)
             );
+
+    public static final Set<ValueRange> SOUNDS = Set.of(
+            ValueRange.of(2051263, 2063433) // Finish him
+    );
 
     public static final String RNC = "rnc_propack_x64.exe";
 
@@ -56,6 +62,8 @@ public class App {
         byte[] fileData = Files.readAllBytes(Paths.get(file));
         System.out.println("Extrayendo bloques...");
         execute(RNC, "e", file);
+        System.out.println("Extrayendo datos sin comprimir...");
+        extractUncompressedBlock(SOUNDS, "pcm", fileData);
         System.out.println("Extrayendo textos...");
         List<Texticle> texts = extractTexts(fileData);
         System.out.println("Extracción terminada, escribiendo salida...");
@@ -74,19 +82,10 @@ public class App {
             System.out.println("No se encontraron archivos extraídos en la carpeta 'extracted'");
             System.exit(1);
         }
-        System.out.print("Inyectando:");
-        for (File extractedFile : extractedFiles) {
-            execute("rnc_propack_x64.exe", "p", "extracted\\" + extractedFile.getName(), "temp.bin");
-            System.out.print(" " + extractedFile.getName());
-            String addressHex = extractedFile.getName().substring(5, 11);
-            int addressDecimal = Integer.parseInt(addressHex, 16);
-            byte[] compressedData = Files.readAllBytes(Paths.get("temp.bin"));
-            System.arraycopy(compressedData, 0, fileData, addressDecimal, compressedData.length);
-        }
-        File tempFile = new File("temp.bin");
-        if (tempFile.exists()) {
-            tempFile.delete();
-        }
+        System.out.print("Inyectando bloques comprimidos:");
+        injectCompressedBlocks(extractedFiles, fileData);
+        System.out.print("Inyectando bloques sin comprimir: ");
+        injectUncompressedBlocks(extractedFiles, fileData, "pcm");
         System.out.println("Inyectando textos...");
         List<Texticle> texticles = extractTexts(file);
         for (Texticle texticle : texticles) {
@@ -99,6 +98,39 @@ public class App {
         File outputFile = new File(file + ".patched.bin");
         Files.write(outputFile.toPath(), fileData);
         System.out.println("Salida escrita en: " + outputFile.getAbsolutePath());
+    }
+
+    private static void injectCompressedBlocks(File[] extractedFiles, byte[] fileData) throws IOException, InterruptedException {
+        for (File extractedFile : extractedFiles) {
+            if (!extractedFile.getName().startsWith("data_")) {
+                continue;
+            }
+            execute("rnc_propack_x64.exe", "p", "extracted\\" + extractedFile.getName(), "temp.bin");
+            System.out.print(" " + extractedFile.getName());
+            String addressHex = extractedFile.getName().substring(5, 11);
+            int addressDecimal = Integer.parseInt(addressHex, 16);
+            byte[] compressedData = Files.readAllBytes(Paths.get("temp.bin"));
+            System.arraycopy(compressedData, 0, fileData, addressDecimal, compressedData.length);
+        }
+        File tempFile = new File("temp.bin");
+        if (tempFile.exists()) {
+            tempFile.delete();
+        }
+        System.out.println();
+    }
+
+    private static void injectUncompressedBlocks(File[] extractedFiles, byte[] fileData, String extension) throws IOException {
+        for (File extractedFile : extractedFiles) {
+            if (!extractedFile.getName().endsWith(extension)) {
+                continue;
+            }
+            System.out.print(" " + extractedFile.getName());
+            String addressHex = extractedFile.getName().substring(extension.length() + 1, extractedFile.getName().lastIndexOf('.'));
+            int addressDecimal = Integer.parseInt(addressHex, 16);
+            byte[] uncompressedData = Files.readAllBytes(Paths.get(extractedFile.getAbsolutePath()));
+            System.arraycopy(uncompressedData, 0, fileData, addressDecimal, uncompressedData.length);
+        }
+        System.out.println();
     }
 
     private static void fixChecksum(byte[] romBytes) {
@@ -152,6 +184,19 @@ public class App {
             }
         }
         return texticles;
+    }
+
+    public static void extractUncompressedBlock(Set<ValueRange> ranges, String extension, byte[] fileData) throws IOException {
+        for (ValueRange range : ranges) {
+            int start = (int) range.getMinimum();
+            int end = (int) range.getMaximum();
+            byte[] block = new byte[end - start + 1];
+            System.arraycopy(fileData, start, block, 0, end - start + 1);
+            String fileName = "extracted/" + extension + "_" + Integer.toHexString(start) + "." + extension;
+            FileOutputStream fos = new FileOutputStream(fileName);
+            fos.write(block);
+            fos.close();
+        }
     }
 
     public static List<Texticle> extractTexts(byte[] fileData) {
@@ -216,7 +261,7 @@ public class App {
 
     public static void execute(String... parameters) throws IOException, InterruptedException {
         ProcessBuilder processBuilder = new ProcessBuilder(parameters);
-        //processBuilder.inheritIO();
+        processBuilder.inheritIO();
         Process process = processBuilder.start();
         int exitCode = process.waitFor();
         if (exitCode != 0) {
