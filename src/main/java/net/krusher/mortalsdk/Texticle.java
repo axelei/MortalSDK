@@ -19,7 +19,7 @@ public record Texticle(int address, int size, String text) {
         if (size != result.length) {
             System.out.println("Alerta: El texto leído \"" + text + "\" tiene " + result.length + " caracteres, pero el texto original tenía " + size + " caracteres. Se cortará o se rellenará con espacios.");
             if (result.length < size) {
-                int padding = size - result.length;
+                int padding = result.length;
                 result = Arrays.copyOf(result, size);
                 Arrays.fill(result, padding, size, ASCII_SPACE);
             } else {
