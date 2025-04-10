@@ -63,6 +63,7 @@ public class App {
         }
         Log.pnl("Extrayendo datos sin comprimir...");
         extractUncompressedBlock(config.sounds(), "pcm", fileData);
+        extractUncompressedBlock(config.bins(), "bin", fileData);
         Log.pnl("Extrayendo textos...");
         List<Texticle> texts = extractTexts(fileData);
         Log.pnl("Extracción terminada, escribiendo salida...");
@@ -86,6 +87,7 @@ public class App {
             }
             Log.p("Inyectando bloques sin comprimir: ");
             injectUncompressedBlocks(extractedFiles, fileData, "pcm");
+            injectUncompressedBlocks(extractedFiles, fileData, "bin");
         }
         Log.pnl("Inyectando textos...");
         List<Texticle> texticles = extractTexts(file);
@@ -122,11 +124,11 @@ public class App {
 
     private static void injectUncompressedBlocks(File[] extractedFiles, byte[] fileData, String extension) throws IOException {
         for (File extractedFile : extractedFiles) {
-            if (!extractedFile.getName().endsWith(extension)) {
+            if (!extractedFile.getName().startsWith(extension)) {
                 continue;
             }
             Log.p(" " + extractedFile.getName());
-            String addressHex = extractedFile.getName().substring(extension.length() + 1, extractedFile.getName().lastIndexOf('.'));
+            String addressHex = extractedFile.getName().substring(extractedFile.getName().lastIndexOf('_') + 1, extractedFile.getName().lastIndexOf('.'));
             int addressDecimal = Integer.parseInt(addressHex, 16);
             byte[] uncompressedData = Files.readAllBytes(Paths.get(extractedFile.getAbsolutePath()));
             System.arraycopy(uncompressedData, 0, fileData, addressDecimal, uncompressedData.length);
