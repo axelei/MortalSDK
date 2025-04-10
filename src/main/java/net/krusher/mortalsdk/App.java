@@ -1,11 +1,12 @@
 package net.krusher.mortalsdk;
 
+import org.apache.commons.lang3.StringUtils;
+
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.time.temporal.ValueRange;
@@ -18,28 +19,25 @@ import java.util.Set;
  */
 public class App {
 
-    public static final byte[] TEXTSCHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ!:'.,- ".getBytes(StandardCharsets.ISO_8859_1);
-    public static final int MIN_CHARS = 4;
-    public static final Set<ValueRange> TEXTS_RANGES = Set.of(
-            ValueRange.of(0, 3187513)
-            );
-
-    public static final Set<ValueRange> SOUNDS = Set.of(
-            ValueRange.of(2051263, 2063433) // Finish him
-    );
-
-    public static final String RNC_EXE = "rnc_propack_x64.exe";
-
     private static final int CHECKSUM_OFFSET = 398; // 256 + 142
+
+    private static Config config;
 
     public static void main( String[] args ) throws IOException, InterruptedException {
 
-        System.out.println("MortalSDK by Krusher - Programa bajo licencia GPL 3");
+        Log.pnl("MortalSDK by Krusher - Programa bajo licencia GPL 3");
 
         //check parameters
-        if (args.length != 2) {
+        if (args.length < 2) {
             displayHelp();
             System.exit(1);
+        }
+
+        //parse config if exists
+        if (args.length > 2) {
+            config = Config.getInstance(args[2]);
+        } else {
+            config = new Config();
         }
 
         //check mode
@@ -56,47 +54,51 @@ public class App {
     }
 
     public static void extract(String file) throws IOException, InterruptedException {
-        System.out.println("Modo: Extraer");
-        System.out.println("Leyendo archivo: " + file);
+        Log.pnl("Modo: Extraer");
+        Log.pnl("Leyendo archivo: " + file);
         byte[] fileData = Files.readAllBytes(Paths.get(file));
-        System.out.println("Extrayendo bloques...");
-        execute(RNC_EXE, "e", file);
-        System.out.println("Extrayendo datos sin comprimir...");
-        extractUncompressedBlock(SOUNDS, "pcm", fileData);
-        System.out.println("Extrayendo textos...");
+        if (StringUtils.isNotBlank(config.proPackExe())) {
+            Log.pnl("Extrayendo bloques...");
+            execute(config.proPackExe(), "e", file);
+        }
+        Log.pnl("Extrayendo datos sin comprimir...");
+        extractUncompressedBlock(config.sounds(), "pcm", fileData);
+        Log.pnl("Extrayendo textos...");
         List<Texticle> texts = extractTexts(fileData);
-        System.out.println("Extracción terminada, escribiendo salida...");
+        Log.pnl("Extracción terminada, escribiendo salida...");
         writeTexts(texts, file);
-        System.out.println("Salida escrita en: " + file + ".txt");
+        Log.pnl("Salida escrita en: " + file + ".txt");
     }
 
     public static void inject(String file) throws IOException, InterruptedException {
-        System.out.println("Modo: Inyectar");
-        System.out.println("Leyendo archivo: " + file);
+        Log.pnl("Modo: Inyectar");
+        Log.pnl("Leyendo archivo: " + file);
         byte[] fileData = Files.readAllBytes(Paths.get(file));
-        System.out.println("Inyectando bloques...");
+        Log.pnl("Inyectando bloques...");
         File extractedDir = new File("extracted");
         File[] extractedFiles = extractedDir.listFiles();
         if (extractedFiles == null || extractedFiles.length == 0) {
-            System.out.println("No se encontraron archivos extraídos en la carpeta 'extracted'");
-            System.exit(1);
+            Log.pnl("No se encontraron archivos extraídos en la carpeta 'extracted'");
+        } else {
+            if (StringUtils.isNotBlank(config.proPackExe())) {
+                Log.p("Inyectando bloques comprimidos:");
+                injectCompressedBlocks(extractedFiles, fileData);
+            }
+            Log.p("Inyectando bloques sin comprimir: ");
+            injectUncompressedBlocks(extractedFiles, fileData, "pcm");
         }
-        System.out.print("Inyectando bloques comprimidos:");
-        injectCompressedBlocks(extractedFiles, fileData);
-        System.out.print("Inyectando bloques sin comprimir: ");
-        injectUncompressedBlocks(extractedFiles, fileData, "pcm");
-        System.out.println("Inyectando textos...");
+        Log.pnl("Inyectando textos...");
         List<Texticle> texticles = extractTexts(file);
         for (Texticle texticle : texticles) {
             System.arraycopy(texticle.toAsciiBytes(), 0, fileData, texticle.address(), texticle.size());
         }
-        System.out.println("Inyección terminada.");
-        System.out.println("Arreglando checksum...");
+        Log.pnl("Inyección terminada.");
+        Log.pnl("Arreglando checksum...");
         fixChecksum(fileData);
-        System.out.println("Escribiendo salida...");
+        Log.pnl("Escribiendo salida...");
         File outputFile = new File(file + ".patched.bin");
         Files.write(outputFile.toPath(), fileData);
-        System.out.println("Salida escrita en: " + outputFile.getAbsolutePath());
+        Log.pnl("Salida escrita en: " + outputFile.getAbsolutePath());
     }
 
     private static void injectCompressedBlocks(File[] extractedFiles, byte[] fileData) throws IOException, InterruptedException {
@@ -104,8 +106,8 @@ public class App {
             if (!extractedFile.getName().startsWith("data_")) {
                 continue;
             }
-            execute("rnc_propack_x64.exe", "p", "extracted\\" + extractedFile.getName(), "temp.bin");
-            System.out.print(" " + extractedFile.getName());
+            execute(config.proPackExe(), "p", "extracted\\" + extractedFile.getName(), "temp.bin");
+            Log.p(" " + extractedFile.getName());
             String addressHex = extractedFile.getName().substring(5, 11);
             int addressDecimal = Integer.parseInt(addressHex, 16);
             byte[] compressedData = Files.readAllBytes(Paths.get("temp.bin"));
@@ -115,7 +117,7 @@ public class App {
         if (tempFile.exists()) {
             tempFile.delete();
         }
-        System.out.println();
+        Log.pnl();
     }
 
     private static void injectUncompressedBlocks(File[] extractedFiles, byte[] fileData, String extension) throws IOException {
@@ -123,29 +125,28 @@ public class App {
             if (!extractedFile.getName().endsWith(extension)) {
                 continue;
             }
-            System.out.print(" " + extractedFile.getName());
+            Log.p(" " + extractedFile.getName());
             String addressHex = extractedFile.getName().substring(extension.length() + 1, extractedFile.getName().lastIndexOf('.'));
             int addressDecimal = Integer.parseInt(addressHex, 16);
             byte[] uncompressedData = Files.readAllBytes(Paths.get(extractedFile.getAbsolutePath()));
             System.arraycopy(uncompressedData, 0, fileData, addressDecimal, uncompressedData.length);
         }
-        System.out.println();
+        Log.pnl();
     }
 
     private static void fixChecksum(byte[] romBytes) {
 
-        int prev_cs = readWord(romBytes, CHECKSUM_OFFSET);
-        System.out.printf("Checksum existente: 0x%04x%n", prev_cs);
+        int previousChecksum = readWord(romBytes, CHECKSUM_OFFSET);
+        Log.pf("Checksum existente: 0x%04x%n", previousChecksum);
 
         int checksum = calculateChecksum(romBytes);
-        System.out.printf("Checksum válido: 0x%04x%n", checksum);
+        Log.pf("Checksum válido: 0x%04x%n", checksum);
 
-        if (prev_cs != checksum) {
-            System.out.println("El checksum ha cambiado, arreglando...");
-
+        if (previousChecksum != checksum) {
+            Log.pnl("El checksum ha cambiado, arreglando...");
             writeWord(romBytes, CHECKSUM_OFFSET, checksum);
         } else {
-            System.out.println("¡El checksum no ha cambiado!");
+            Log.pnl("¡El checksum no ha cambiado!");
         }
     }
 
@@ -212,7 +213,7 @@ public class App {
                 buffer.append((char) fileData[i]);
                 length++;
             } else if (inText) {
-                if (length > MIN_CHARS) {
+                if (length > config.minChars()) {
                     texts.add(new Texticle(i - length, length, buffer.toString()));
                 }
                 length = 0;
@@ -223,7 +224,10 @@ public class App {
     }
 
     public static boolean inRange(int i) {
-        for (ValueRange range : TEXTS_RANGES) {
+        if (config.textRanges().isEmpty()) {
+            return true;
+        }
+        for (ValueRange range : config.textRanges()) {
             if (range.isValidIntValue(i)) {
                 return true;
             }
@@ -244,7 +248,7 @@ public class App {
     }
 
     private static boolean isChar(byte fileDatum) {
-        for (byte theChar : TEXTSCHARS) {
+        for (byte theChar : config.getTextCharsBytes()) {
             if (fileDatum == theChar) {
                 return true;
             }
@@ -253,9 +257,12 @@ public class App {
     }
 
     public static void displayHelp() {
-        System.out.println("Debe especificarse modo y archivo");
-        System.out.println("Ejemplos: x \"rom a extraer.bin\"");
-        System.out.println("          i \"rom a inyectar.bin\"");
+        Log.pnl("Debe especificarse modo y archivo");
+        Log.pnl("Ejemplos: x \"rom a extraer.bin\" [\"configuracion\"]");
+        Log.pnl("          i \"rom a inyectar.bin\" [\"configuracion\"]");
+        Log.pnl("Modo: x = extraer, i = inyectar");
+        Log.pnl("Configuracion: Opcional, se puede dejar en blanco y se usará una por defecto.");
+        Log.pnl("Ejemplos de configuracion en el directorio \"configs\".");
     }
 
     public static void execute(String... parameters) throws IOException, InterruptedException {
@@ -267,7 +274,7 @@ public class App {
         Process process = processBuilder.start();
         int exitCode = process.waitFor();
         if (exitCode != 0) {
-            System.out.println("Error al ejecutar el comando: " + exitCode);
+            Log.pnl("Error al ejecutar el comando: " + exitCode);
             System.exit(exitCode);
         }
     }
