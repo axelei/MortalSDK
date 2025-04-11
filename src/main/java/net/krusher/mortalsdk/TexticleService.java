@@ -41,6 +41,7 @@ public class TexticleService {
                         buffer.append((char) fileData[i]);
                     }
                 }
+                i += extractedLength - 1;
                 length += extractedLength;
             } else if (inText) {
                 if (length > App.config.minChars()) {
