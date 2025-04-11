@@ -8,6 +8,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -194,13 +195,16 @@ public class TexticleService {
             Log.p("Alerta: El texto leído \"{0}\" tiene {1} caracteres, pero el texto original tenía {2} caracteres. ", oldText, textData.length, room);
             if (Objects.isNull(pointerAddress)) {
                 writeCutText(textData, fileData, address);
+                return;
             }
             Integer newAddress = getNewAddress(textData.length);
             if (Objects.isNull(newAddress)) {
                 writeCutText(textData, fileData, address);
+                return;
             }
 
             byte[] padding = new byte[room];
+            Arrays.fill(padding, Texticle.ASCII_SPACE);
             System.arraycopy(padding, 0, fileData, address, room);
 
             Log.pnl("Moviendo el texto a la dirección {0} ({1})", Integer.toHexString(newAddress), newAddress);
