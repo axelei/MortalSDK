@@ -10,6 +10,7 @@ public class Log {
     private Log() {}
 
     public static void pnl(String message, Object... args) {
+
         System.out.println(MessageFormat.format(message, args));
     }
 

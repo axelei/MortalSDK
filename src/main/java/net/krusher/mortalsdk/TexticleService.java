@@ -7,10 +7,10 @@ import java.io.PrintWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.time.temporal.ValueRange;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 
 public class TexticleService {
 
@@ -78,8 +78,8 @@ public class TexticleService {
         if (App.config.textRanges().isEmpty()) {
             return true;
         }
-        for (ValueRange range : App.config.textRanges()) {
-            if (range.isValidIntValue(i)) {
+        for (Range range : App.config.textRanges()) {
+            if (range.isInRange(i)) {
                 return true;
             }
         }
@@ -122,7 +122,7 @@ public class TexticleService {
         return 0;
     }
 
-    public static List<Texticle> findTexticles(String file) throws IOException {
+    public static List<Texticle> readTexticles(String file) throws IOException {
         List<String> lines = Files.readAllLines(Paths.get(file + ".txt"));
         List<Texticle> texticles = new ArrayList<>();
         for (String line : lines) {
@@ -130,9 +130,6 @@ public class TexticleService {
             int address = Integer.parseInt(parts[0]);
             int size = Integer.parseInt(parts[1]);
             String text = parts[2];
-            if (text.length() > size) {
-                text = text.substring(0, size);
-            }
             Integer pointerAddress = null;
             if (parts.length > 3) {
                 pointerAddress = Integer.parseInt(parts[3]);
@@ -143,7 +140,7 @@ public class TexticleService {
     }
 
     public static void insertTexticles(String file, byte[] fileData) throws IOException {
-        List<Texticle> texticles = TexticleService.findTexticles(file);
+        List<Texticle> texticles = TexticleService.readTexticles(file);
         for (Texticle texticle : texticles) {
             byte[] textData;
             if (Objects.isNull(App.tbl)) {
@@ -153,12 +150,13 @@ public class TexticleService {
                 for (int i = 0; i < texticle.text().length(); i++) {
 
                     for (int a = MAX_TBL_KEY_LENGTH; a > 0; a--) {
-                        if (texticle.size() < i + a) {
-                            continue;
-                        }
                         StringBuilder chars = new StringBuilder();
                         for (int b = 0; b < a; b++) {
-                            chars.append(texticle.text().charAt(i + b));
+                            if (i + b >= texticle.text().length()) {
+                                chars.append((char) 0x00);
+                            } else {
+                                chars.append(texticle.text().charAt(i + b));
+                            }
                         }
                         if (App.tbl.containsValue(chars.toString())) {
                             String hexValue = App.tbl.inverse().get(chars.toString());
@@ -176,8 +174,68 @@ public class TexticleService {
                     textData[a] = textDataList.get(a);
                 }
             }
-            System.arraycopy(textData, 0, fileData, texticle.address(), texticle.size());
+            writeTexticle(texticle.address(), textData, fileData, texticle.size(), texticle.pointerAddress());
         }
+    }
+
+    private static void writeTexticle(int address, byte[] textData, byte[] fileData, int room, Integer pointerAddress) {
+        if (textData.length == room) {
+            System.arraycopy(textData, 0, fileData, address, textData.length);
+        }
+        if (textData.length < room) {
+            System.arraycopy(textData, 0, fileData, address, textData.length);
+            String oldText = new String(textData, StandardCharsets.ISO_8859_1);
+            Log.pnl("Alerta: El texto leído \"{0}\" tiene {1} caracteres, pero el texto original tenía {2} caracteres. Se rellenará con ceros.", oldText, textData.length, room);
+            byte[] padding = new byte[room - textData.length];
+            System.arraycopy(padding, 0, fileData, address + textData.length, padding.length);
+        }
+        if (textData.length > room) {
+            String oldText = new String(textData, StandardCharsets.ISO_8859_1);
+            Log.p("Alerta: El texto leído \"{0}\" tiene {1} caracteres, pero el texto original tenía {2} caracteres. ", oldText, textData.length, room);
+            if (Objects.isNull(pointerAddress)) {
+                writeCutText(textData, fileData, address);
+            }
+            Integer newAddress = getNewAddress(textData.length);
+            if (Objects.isNull(newAddress)) {
+                writeCutText(textData, fileData, address);
+            }
+
+            byte[] padding = new byte[room];
+            System.arraycopy(padding, 0, fileData, address, room);
+
+            Log.pnl("Moviendo el texto a la dirección {0} ({1})", Integer.toHexString(newAddress), newAddress);
+
+            System.arraycopy(textData, 0, fileData, newAddress, textData.length);
+            writeThreeBytes(fileData, pointerAddress, newAddress);
+        }
+    }
+    private static void writeCutText(byte[] textData, byte[] fileData, int address) {
+        Log.pnl("Se cortará el texto.");
+        System.arraycopy(textData, 0, fileData, address, textData.length);
+    }
+
+    private static Integer getNewAddress(int size) {
+        Optional<Range> range = App.config.spaceRanges().stream().findFirst();
+        // No more ranges
+        if (range.isEmpty()) {
+            return null;
+        }
+        // No more space, remove and try next
+        if (range.get().getFrom() > range.get().getTo()) {
+            App.config.spaceRanges().remove(range.get());
+            return getNewAddress(size);
+        }
+
+        int newAddress = range.get().getFrom();
+        range.get().setFrom(range.get().getFrom() + size + 1);
+
+        return newAddress;
+    }
+
+    public static void writeThreeBytes(byte[] data, int offset, int value) {
+        data[offset] = (byte) ((value >> 16) & 0xFF);
+        data[offset + 1] = (byte) ((value >> 8) & 0xFF);
+        data[offset + 2] = (byte) (value & 0xFF);
     }
 
 }

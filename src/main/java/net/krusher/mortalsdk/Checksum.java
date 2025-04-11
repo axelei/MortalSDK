@@ -26,7 +26,7 @@ public class Checksum {
         return ((data[offset] & 0xFF) << 8) | (data[offset + 1] & 0xFF);
     }
 
-    private static void writeWord(byte[] data, int offset, int value) {
+    public static void writeWord(byte[] data, int offset, int value) {
         data[offset] = (byte) ((value >> 8) & 0xFF);
         data[offset + 1] = (byte) (value & 0xFF);
     }

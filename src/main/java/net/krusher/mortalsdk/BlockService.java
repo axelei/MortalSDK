@@ -5,7 +5,6 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.time.temporal.ValueRange;
 import java.util.Set;
 
 public class BlockService {
@@ -44,10 +43,10 @@ public class BlockService {
         }
     }
 
-    public static void extractUncompressedBlock(Set<ValueRange> ranges, String extension, byte[] fileData) throws IOException {
-        for (ValueRange range : ranges) {
-            int start = (int) range.getMinimum();
-            int end = (int) range.getMaximum();
+    public static void extractUncompressedBlock(Set<Range> ranges, String extension, byte[] fileData) throws IOException {
+        for (Range range : ranges) {
+            int start = (int) range.getFrom();
+            int end = (int) range.getTo();
             byte[] block = new byte[end - start + 1];
             System.arraycopy(fileData, start, block, 0, end - start + 1);
             String fileName = "extracted/" + extension + "_" + Integer.toHexString(start) + "." + extension;
