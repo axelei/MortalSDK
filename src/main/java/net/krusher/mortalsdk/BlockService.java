@@ -1,5 +1,7 @@
 package net.krusher.mortalsdk;
 
+import org.apache.commons.lang3.StringUtils;
+
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -45,15 +47,19 @@ public class BlockService {
 
     public static void extractUncompressedBlock(Set<Range> ranges, String extension, byte[] fileData) throws IOException {
         for (Range range : ranges) {
-            int start = (int) range.getFrom();
-            int end = (int) range.getTo();
+            int start = range.getFrom();
+            int end = range.getTo();
             byte[] block = new byte[end - start + 1];
             System.arraycopy(fileData, start, block, 0, end - start + 1);
-            String fileName = "extracted/" + extension + "_" + Integer.toHexString(start) + "." + extension;
+            String fileName = "extracted/" + extension + "_" + toHexStringPadded(start) + "." + extension;
             FileOutputStream fos = new FileOutputStream(fileName);
             fos.write(block);
             fos.close();
         }
+    }
+
+    private static String toHexStringPadded(int address) {
+        return StringUtils.leftPad(Integer.toHexString(address), 6, '0');
     }
 
     public static void execute(String... parameters) throws IOException, InterruptedException {
