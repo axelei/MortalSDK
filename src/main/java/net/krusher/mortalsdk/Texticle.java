@@ -2,11 +2,12 @@ package net.krusher.mortalsdk;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.Optional;
 
 /**
  * A "texticle" is a structure that contains an address, size, and text.
  */
-public record Texticle(int address, int size, String text) {
+public record Texticle(int address, int size, String text, Integer pointerAddress) {
 
     public static final int PAD = 8;
     public static final String FORMAT = "%0" + PAD + "d";
@@ -14,7 +15,10 @@ public record Texticle(int address, int size, String text) {
     public static final byte ASCII_SPACE = 0x20;
 
     public String format() {
-        return String.format(FORMAT, address) + "#" + String.format(FORMAT, size) + "#" + text;
+        String pointerAddressStr = Optional.ofNullable(this.pointerAddress)
+                .map(pointerAddress -> "#" + String.format(FORMAT, pointerAddress))
+                .orElse("");
+        return String.format(FORMAT, address) + "#" + String.format(FORMAT, size) + "#" + text + pointerAddressStr;
     }
 
     public byte[] toAsciiBytes() {
