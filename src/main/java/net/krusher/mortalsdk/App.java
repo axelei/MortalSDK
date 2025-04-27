@@ -56,7 +56,7 @@ public class App {
         byte[] fileData = Files.readAllBytes(Paths.get(file));
         if (StringUtils.isNotBlank(config.proPackExe())) {
             Log.pnl("Extrayendo bloques...");
-            BlockService.execute(config.proPackExe(), "e", file);
+            BlockService.extractCompressedBlocks(file);
         }
         Log.pnl("Extrayendo datos sin comprimir...");
         BlockService.extractUncompressedBlock(config.sounds(), "pcm", fileData);

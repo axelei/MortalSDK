@@ -46,7 +46,7 @@ public class TexticleService {
                 length += extractedLength;
             } else if (inText) {
                 if (length > App.config.minChars()) {
-                    Integer pointerAddress = findValueAddress(i - length, fileData);
+                    Integer pointerAddress = findPointerAddress(i - length, fileData);
                     texts.add(new Texticle(i - length, length, buffer.toString(), pointerAddress));
                 }
                 length = 0;
@@ -57,7 +57,7 @@ public class TexticleService {
         return texts;
     }
 
-    public static Integer findValueAddress(Integer value, byte[] fileData) {
+    public static Integer findPointerAddress(Integer value, byte[] fileData) {
         if (value == null) {
             return null;
         }
@@ -218,7 +218,7 @@ public class TexticleService {
         System.arraycopy(textData, 0, fileData, address, textData.length);
     }
 
-    private static Integer getNewAddress(int size) {
+    public static Integer getNewAddress(int size) {
         Optional<Range> range = App.config.spaceRanges().stream().findFirst();
         // No more ranges
         if (range.isEmpty()) {
