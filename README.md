@@ -1,93 +1,151 @@
 # MortalSDK
-Extractor e insertor de bloques comprimidos y textos de Mortal Kombat (Mega Drive). Está escrito en Java 24 y preparado para compilarlo AoT con GraalVM. Puede servir para otros juegos, en particular para los que usan compresión RNC.
 
-¿Por qué en Java? Porque es el lenguaje que, en este momento, me da de comer. :)
+Extractor e inyector de recursos para *Mortal Kombat* de Mega Drive. Trabaja con bloques RNC, textos, tiles 4bpp y audio PCM. El comportamiento específico de cada ROM se describe mediante un fichero `.properties`; el repositorio incluye una configuración para *Mortal Kombat Arcade Edition v2.0*.
 
-## Uso:
-
-### Extracción:
-
-`MortalSDK x "mortal kombat.bin" [configuracion.properties]`
-
-En la carpeta `extracted` se generarán los bloques descomprimidos. Los gráficos están en formato tiles de Mega Drive, es decir, 4bpp linear. El texto estará en el nombre de la ROM más `.txt`. Si se especifica `configuracion.properties` se usará esta.
-
-En la carpeta `configs` hay un ejemplo de configuración que estoy usando para mi proyecto personal.
-
-### Inyección:
-
-`MortalSDK i "mortal kombat.bin" [configuracion.properties]`
-
-Se generará un fichero nuevo con los recursos inyectados. Si se especifica `configuracion.properties` se usará esta.
+MortalSDK nunca necesita modificar la ROM de entrada: los comandos de inyección generan un fichero nuevo.
 
 ## Requisitos
 
-Require `rnc_propack_x64.exe` u otra compilación para extraer/inyectar bloques comprimidos RNC. Se puede obtener de: https://github.com/lab313ru/rnc_propack_source/releases
+- Java 24 para ejecutar el JAR o compilar el proyecto.
+- RNC ProPack para extraer e inyectar bloques comprimidos. Puede obtenerse en [rnc_propack_source](https://github.com/lab313ru/rnc_propack_source/releases).
+- GraalVM solamente si se quiere generar el ejecutable AOT opcional.
 
-Con pequeños ajustes en la configuración se puede usar con otras ROMs y otros sistemas operativos. Añade un 'issue' si tienes alguna propuesta de cambio.
+`rnc_propack_x64.exe` debe estar en el directorio de ejecución o debe indicarse su ruta mediante `proPackExe` en la configuración.
 
 ## Compilación
 
-Para compilarlo, necesitas tener instalado Maven y GraalVM. Puedes encontrar más información en la [página oficial de GraalVM](https://www.graalvm.org/). Si no quieres o no necesitas compilación AoT, elimina dicha sección del `pom.xml`.
+En Windows:
 
-Sólo necesitas ejecutar en Windows:
+```powershell
+mvnw.cmd clean package
+```
 
-`mvnw.cmd clean package`
+En Linux o macOS:
 
-En la carpeta `dist` tendrás `MortalSDK.jar`, que incluye sus dependencias. Se ejecuta con:
+```sh
+./mvnw clean package
+```
 
-`java -jar dist/MortalSDK.jar x "mortal kombat.bin" "dist/configs/Mortal Kombat Arcade Edition v2-0.properties"`
+El resultado autocontenido es `dist/MortalSDK.jar`. Para solicitar además la compilación AOT con una instalación de GraalVM que incluya Native Image:
 
-## Recursos editables
+```powershell
+mvnw.cmd -Pnative clean package
+```
 
-La extracción conserva siempre los binarios originales y genera representaciones editables adicionales:
+El perfil AOT original se conserva. La CLI no depende de la interfaz gráfica; la GUI debe validarse con los metadatos AWT y Java Sound correspondientes a la versión de GraalVM utilizada.
 
-- `extracted/data_*.bin`: bloques RNC descomprimidos.
-- `extracted/previews/data_*.png`: vistas indexadas de los bloques compatibles con tiles 4bpp de Mega Drive. Cada gris representa un índice de color de 0 a 15; las paletas no forman parte de los tiles.
-- `extracted/pcm_*.pcm`: audio PCM crudo.
-- `extracted/pcm_*.wav`: audio PCM original signed de 8 bits convertido al WAV estándar de 8 bits, mono y 7040 Hz.
-- `extracted/samples/sample_*.wav`: 114 muestras válidas delimitadas por la tabla de audio de la ROM. El nombre conserva ID, offset, longitud y flags. La entrada `0x63` de esta versión apunta fuera de la ROM y se informa, pero no se extrae.
-- `extracted/music_*.music`: bancos, tablas y driver Z80 del subsistema musical conservados en formato binario crudo.
-- `<rom>.txt`: textos extraídos mediante la tabla TBL correspondiente.
+## Extracción e inyección completa
 
-Durante la inyección, los PNG se convierten de nuevo a tiles y los WAV a PCM antes de recomprimir los bloques. MortalSDK rechaza dimensiones, colores, formatos de audio o tamaños que puedan sobrescribir datos adyacentes. La salida se escribe siempre como `<rom>.patched.bin`; la ROM de entrada no se modifica.
+```powershell
+java -jar dist/MortalSDK.jar x "juego.bin" "dist/configs/Mortal Kombat Arcade Edition v2-0.properties"
+java -jar dist/MortalSDK.jar i "juego.bin" "dist/configs/Mortal Kombat Arcade Edition v2-0.properties"
+```
 
-Para RNC ProPack v1.8, `rnc_propack_x64.exe` debe estar en el directorio desde el que se ejecuta MortalSDK o `proPackExe` debe indicar su ruta.
+Los modos `x` e `i` aceptan una configuración opcional. Si se omite, solo se aplican los valores predeterminados y no estarán disponibles los rangos específicos del juego.
+
+La extracción crea `extracted/` y `<rom>.txt`. La inyección lee esos recursos y escribe `<rom>.patched.bin`. Para comprobar el flujo antes de editar nada, se recomienda extraer e inyectar sin cambios y comparar ambos ficheros mediante SHA-256.
+
+## Recursos generados
+
+| Recurso | Contenido | Condiciones de reinyección |
+| --- | --- | --- |
+| `extracted/data_*.bin` | Bloques RNC descomprimidos | Se recomprimen con RNC método 1 |
+| `extracted/previews/data_*.png` | Vista editable de tiles compatibles con 4bpp | Dimensiones y valores de índice válidos |
+| `extracted/pcm_*.pcm` | Regiones PCM crudas | Longitud original exacta |
+| `extracted/pcm_*.wav` | Las mismas regiones en WAV reproducible | Mono, PCM unsigned de 8 bits, frecuencia configurada y longitud exacta |
+| `extracted/samples/sample_*.wav` | Samples delimitados por la tabla de audio | En modo `i`, longitud original exacta |
+| `extracted/music_*.music` | Bancos, tablas o driver de música en crudo | Longitud original exacta |
+| `<rom>.txt` | Textos encontrados mediante la tabla TBL | Se reutilizan huecos configurados cuando es posible |
+
+Los PNG son imágenes de índices, no gráficos con la paleta real del juego: cada nivel de gris representa un valor de 0 a 15. Los ficheros `.music` se conservan como binarios porque todavía no existe un editor de secuencias musicales.
+
+## Samples desde la CLI
+
+Consultar la tabla:
+
+```powershell
+java -jar dist/MortalSDK.jar sample list "juego.bin" "configuracion.properties"
+```
+
+Extraer únicamente sus WAV:
+
+```powershell
+java -jar dist/MortalSDK.jar sample extract "juego.bin" "directorio-samples" "configuracion.properties"
+```
+
+Reemplazar uno o varios samples, permitiendo cambiar su duración:
+
+```powershell
+java -jar dist/MortalSDK.jar sample replace "juego.bin" "salida.bin" "configuracion.properties" 01 "nuevo-01.wav" 0A "nuevo-0A.wav"
+```
+
+Los ID se interpretan como hexadecimales. Los WAV deben ser mono, PCM unsigned de 8 bits y utilizar `pcmSampleRate`. El comando:
+
+1. valida todos los WAV y los rangos libres;
+2. coloca los samples por orden de ID y alineados a palabra;
+3. actualiza sus punteros de 24 bits y longitudes de 16 bits;
+4. repara el checksum de Mega Drive;
+5. escribe una ROM distinta sin sobrescribir la entrada.
+
+Todos los reemplazos deben realizarse juntos partiendo de la misma ROM base. El asignador no mantiene un registro persistente de ocupación: volver a usar una ROM ya parcheada con el mismo `spaceRanges` podría reutilizar espacio ocupado anteriormente.
+
+Más detalles sobre el formato y sus límites en [docs/audio-samples.md](docs/audio-samples.md).
 
 ## Editor gráfico de samples
 
-En Windows se puede abrir con doble clic en `MortalSDK-GUI.cmd` y escribir la ruta de la ROM, arrastrar la ROM sobre el lanzador, o ejecutarlo desde consola:
+```powershell
+java -jar dist/MortalSDK.jar gui "juego.bin" "configuracion.properties"
+```
 
-`java -jar dist/MortalSDK.jar gui "mortal kombat.bin" "dist/configs/Mortal Kombat Arcade Edition v2-0.properties"`
+En Windows también puede usarse `MortalSDK-GUI.cmd`: acepta la ROM arrastrada como primer argumento o solicita su ruta. La GUI permite escuchar, preparar varios reemplazos, restablecer cambios pendientes y generar una ROM nueva. Utiliza exactamente el mismo servicio de validación y recolocación que la CLI.
 
-El editor permite seleccionar y reproducir cada muestra, cargar un WAV sustituto, descartar el cambio y generar una ROM nueva. Los WAV deben ser mono, PCM de 8 bits y usar la frecuencia configurada.
+## Configuración
 
-Los samples modificados se escriben en los rangos declarados mediante `spaceRanges`. MortalSDK actualiza automáticamente el puntero de 24 bits y la longitud de 16 bits de cada entrada de la tabla, y finalmente recalcula el checksum. La ROM original no se modifica.
+Los rangos son inclusivos y se escriben en decimal como `inicio,fin`; varios rangos se separan con `#`. `sampleTableOffset` también acepta la notación hexadecimal `0x...`.
 
-## CLI de samples
+| Propiedad | Uso |
+| --- | --- |
+| `minChars` | Longitud mínima de los textos detectados |
+| `textRanges` | Zonas donde buscar textos |
+| `sounds` | Regiones PCM crudas |
+| `music` | Regiones crudas del subsistema musical |
+| `bins` | Otros bloques sin comprimir |
+| `spaceRanges` | Huecos confirmados como libres para recolocación |
+| `proPackExe` | Ruta del ejecutable RNC ProPack |
+| `pcmSampleRate` | Frecuencia utilizada al importar, exportar y reproducir WAV |
+| `sampleTableOffset` | Dirección de la tabla de samples |
+| `sampleCount` | Número de entradas de ocho bytes de la tabla |
 
-La CLI permite inspeccionar y extraer la tabla de samples sin abrir la interfaz gráfica:
+`spaceRanges` es una declaración de confianza: MortalSDK comprueba sus límites y solapamientos, pero no puede demostrar que el juego no use esos bytes. Debe confirmarse para cada revisión concreta de la ROM.
 
-`java -jar dist/MortalSDK.jar sample list "mortal kombat.bin" "configuracion.properties"`
+## Estado de la configuración Arcade Edition v2.0
 
-`java -jar dist/MortalSDK.jar sample extract "mortal kombat.bin" "samples" "configuracion.properties"`
+- Tabla principal: `0x281C50`.
+- Entradas configuradas: 116; 114 tienen datos válidos dentro de la ROM.
+- Formato observado: ID de 8 bits, offset de 24 bits, longitud de 16 bits y flags de 16 bits, todo en big-endian.
+- `pcmSampleRate=7040` es una frecuencia provisional de escucha/importación basada en las pruebas actuales, no una medición definitiva del temporizador de reproducción del juego.
+- La entrada con ID `0x63` contiene un offset fuera de una ROM de 4 MiB. MortalSDK la informa y la omite; no intenta corregirla sin confirmar primero su comportamiento en ejecución.
 
-Para sustituir uno o varios WAV y generar una ROM nueva:
+La configuración identifica una revisión de ROM por su estructura, pero MortalSDK todavía no impone un hash concreto. Verifique la revisión antes de inyectar.
 
-`java -jar dist/MortalSDK.jar sample replace "mortal kombat.bin" "salida.bin" "configuracion.properties" 01 "nuevo-01.wav" 0A "nuevo-0A.wav"`
+## Seguridad y copias
 
-Los ID se interpretan como hexadecimales. Todos los reemplazos de una ROM deben indicarse en la misma ejecución. Igual que el editor gráfico, el comando comprueba que cada WAV sea PCM unsigned de 8 bits, mono y use la frecuencia configurada; recoloca los datos mediante `spaceRanges`, actualiza punteros y longitudes y repara el checksum. Nunca sobrescribe la ROM de entrada.
+- Conserve siempre una ROM limpia fuera del directorio de trabajo.
+- No declare un rango como libre solo porque contenga muchos `00` o `FF`.
+- Pruebe la ROM generada en un emulador y en hardware cuando corresponda.
+- No distribuya ROMs ni recursos del juego; el repositorio contiene únicamente herramientas y configuración.
 
-## Cosas por hacer (no necesariamente en orden)
+## Trabajo pendiente
 
-- Extraer paletas
-- Mejorar la extracción de textos
-- Programar mi propio extractor y compresor de RNC para no necesitar rnc_propack_x64.exe
-- Internacionalizar los mensajes
-- Crear tests unitarios
-- Lanzar mejores alertas si hay inconsistencias y recuperación de errores
+- Extraer paletas reales.
+- Decodificar y editar secuencias musicales.
+- Confirmar la frecuencia PCM desde el código del driver.
+- Resolver la semántica de la entrada de sample `0x63`.
+- Sustituir la dependencia externa de RNC ProPack.
+- Internacionalizar los mensajes y mejorar la recuperación ante errores.
 
 ## Autoría y reconocimientos
 
-Gracias a [Rael G. C.](https://github.com/raelgc) por la información que me faltaba sobre el formato de gráficos y esquema de compresión. 
+Gracias a [Rael G. C.](https://github.com/raelgc) por la información sobre el formato gráfico y el esquema de compresión.
 
-By Krusher, licenciado bajo GPL 3. Por favor, consulta el fichero LICENSE.
+MortalSDK fue creado por Krusher y se distribuye bajo GPL 3. Consulte [LICENSE](LICENSE).

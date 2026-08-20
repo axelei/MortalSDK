@@ -133,7 +133,7 @@ public class App {
         Log.pnl("          sample extract \"rom.bin\" \"directorio\" \"configuracion\"");
         Log.pnl("          sample replace \"rom.bin\" \"salida.bin\" \"configuracion\" ID \"audio.wav\" [ID \"audio.wav\" ...]");
         Log.pnl("Modo: x = extraer, i = inyectar, gui = editor de muestras");
-        Log.pnl("Configuracion: Opcional, se puede dejar en blanco y se usará una por defecto.");
+        Log.pnl("Configuracion: opcional solo en los modos x e i; obligatoria para gui y sample.");
         Log.pnl("Ejemplos de configuracion en el directorio \"configs\".");
     }
 }
