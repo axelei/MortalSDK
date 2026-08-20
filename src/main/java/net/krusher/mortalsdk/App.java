@@ -26,6 +26,10 @@ public class App {
             SampleCli.run(args);
             return;
         }
+        if (args.length > 0 && args[0].equals("palette")) {
+            PaletteCli.run(args);
+            return;
+        }
 
         //check parameters
         if (args.length < 2) {
@@ -81,6 +85,8 @@ public class App {
         BlockService.extractUncompressedBlock(config.sounds(), "pcm", fileData);
         WavService.exportPcmFiles(new File("extracted"), config.pcmSampleRate());
         SampleTableService.exportSamples(fileData, new File("extracted/samples"), config);
+        PaletteService.exportCandidates(fileData, PaletteService.findReferencedPalettes(fileData),
+                new File("extracted/palettes"));
         BlockService.extractUncompressedBlock(config.music(), "music", fileData);
         BlockService.extractUncompressedBlock(config.bins(), "bin", fileData);
         Log.pnl("Extrayendo textos...");
@@ -109,6 +115,7 @@ public class App {
             BlockService.injectUncompressedBlocks(extractedFiles, fileData, "pcm");
             WavService.injectWavFiles(extractedFiles, fileData);
             SampleTableService.injectSamples(fileData, new File("extracted/samples"), config);
+            PaletteService.injectPalettes(fileData, new File("extracted/palettes"));
             BlockService.injectUncompressedBlocks(extractedFiles, fileData, "music");
             BlockService.injectUncompressedBlocks(extractedFiles, fileData, "bin");
             Log.pnl();
@@ -132,6 +139,8 @@ public class App {
         Log.pnl("          sample list \"rom.bin\" \"configuracion\"");
         Log.pnl("          sample extract \"rom.bin\" \"directorio\" \"configuracion\"");
         Log.pnl("          sample replace \"rom.bin\" \"salida.bin\" \"configuracion\" ID \"audio.wav\" [ID \"audio.wav\" ...]");
+        Log.pnl("          palette scan \"rom.bin\" \"directorio\"");
+        Log.pnl("          palette render \"rom.bin\" OFFSET \"tiles.bin\" \"salida.png\"");
         Log.pnl("Modo: x = extraer, i = inyectar, gui = editor de muestras");
         Log.pnl("Configuracion: opcional solo en los modos x e i; obligatoria para gui y sample.");
         Log.pnl("Ejemplos de configuracion en el directorio \"configs\".");

@@ -51,6 +51,7 @@ La extracción crea `extracted/` y `<rom>.txt`. La inyección lee esos recursos 
 | --- | --- | --- |
 | `extracted/data_*.bin` | Bloques RNC descomprimidos | Se recomprimen con RNC método 1 |
 | `extracted/previews/data_*.png` | Vista editable de tiles compatibles con 4bpp | Dimensiones y valores de índice válidos |
+| `extracted/palettes/palette_*.pal` | Candidatos de paleta CRAM referenciados | 16 colores, 32 bytes |
 | `extracted/pcm_*.pcm` | Regiones PCM crudas | Longitud original exacta |
 | `extracted/pcm_*.wav` | Las mismas regiones en WAV reproducible | Mono, PCM unsigned de 8 bits, frecuencia configurada y longitud exacta |
 | `extracted/samples/sample_*.wav` | Samples delimitados por la tabla de audio | En modo `i`, longitud original exacta |
@@ -58,6 +59,19 @@ La extracción crea `extracted/` y `<rom>.txt`. La inyección lee esos recursos 
 | `<rom>.txt` | Textos encontrados mediante la tabla TBL | Se reutilizan huecos configurados cuando es posible |
 
 Los PNG son imágenes de índices, no gráficos con la paleta real del juego: cada nivel de gris representa un valor de 0 a 15. Los ficheros `.music` se conservan como binarios porque todavía no existe un editor de secuencias musicales.
+
+## Localización de paletas
+
+```powershell
+java -jar dist/MortalSDK.jar palette scan "juego.bin" "paletas"
+java -jar dist/MortalSDK.jar palette render "juego.bin" 0x19597A "extracted/data_1959bc.bin" "preview.png"
+```
+
+`palette scan` busca direcciones de ROM referenciadas por punteros y cuyos 32 bytes cumplen el formato CRAM de Mega Drive. Exporta el binario, una muestra PNG, una hoja conjunta y un CSV con las referencias. Es un detector de candidatos: una coincidencia debe confirmarse mediante la tabla o rutina que la usa.
+
+`palette render` aplica un candidato a un bloque lineal de tiles para comprobarlo visualmente. No interpreta mapas de tiles ni el selector de línea de paleta de sus atributos, por lo que un bloque que use varias líneas CRAM no se verá completamente correcto con una sola paleta.
+
+Los hallazgos confirmados para Arcade Edition v2.0 están explicados en [docs/palettes.md](docs/palettes.md).
 
 ## Samples desde la CLI
 
@@ -137,7 +151,7 @@ La configuración identifica una revisión de ROM por su estructura, pero Mortal
 
 ## Trabajo pendiente
 
-- Extraer paletas reales.
+- Asociar cada paleta confirmada con sus tiles y mapas.
 - Decodificar y editar secuencias musicales.
 - Confirmar la frecuencia PCM desde el código del driver.
 - Resolver la semántica de la entrada de sample `0x63`.
