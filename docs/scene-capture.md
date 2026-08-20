@@ -19,6 +19,10 @@ Play normally and press **F8**. Every capture in `captures/` contains the full
 `sprites.png`; complete `vram.bin`, `cram.bin` and `vsram.bin` dumps; the
 matching `capture.State`; and `metadata.json`.
 
+The Windows launcher copies the input ROM to an ignored temporary `.gen` file.
+This avoids BizHawk's platform chooser for ambiguous `.bin` files; the original
+ROM is never modified.
+
 All PNG files restore one savestate and advance the same single frame, so
 animation cannot move between layers. The images identify visible composition;
 the dumps retain exact tile indices, flips and palette lines for matching those
