@@ -72,7 +72,7 @@ java -jar dist/MortalSDK.jar palette report "juego.bin" "extracted" "palette-rep
 
 `palette render` aplica un candidato a un bloque lineal de tiles para comprobarlo visualmente. No interpreta mapas de tiles ni el selector de línea de paleta de sus atributos, por lo que un bloque que use varias líneas CRAM no se verá completamente correcto con una sola paleta.
 
-`palette report` genera un HTML en cuadrícula con todas las tiras de color, referencias y previews. Para cada paleta usa el bloque 4bpp extraído cuya dirección es más cercana y muestra la distancia, por lo que sirve para inspección rápida pero no confirma por sí solo la asociación.
+`palette report` genera un HTML en cuadrícula con todas las tiras de color, referencias y previews. Para cada paleta compara los seis bloques 4bpp extraídos cuyas direcciones son más cercanas y muestra sus distancias, por lo que sirve para inspección rápida pero no confirma por sí solo la asociación.
 
 Los hallazgos confirmados para Arcade Edition v2.0 están explicados en [docs/palettes.md](docs/palettes.md).
 

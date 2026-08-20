@@ -121,27 +121,31 @@ public final class PaletteService {
             String id = String.format("%06x", candidate.offset());
             String paletteName = "palette_" + id + ".png";
             ImageIO.write(renderPalette(raw, 16), "png", new File(assets, paletteName));
-            TileBlock block = blocks.stream().min(Comparator.comparingInt(item ->
-                    Math.abs(item.address() - candidate.offset()))).orElse(null);
-            String previewHtml = "<div class=\"missing\">Sin bloque 4bpp extraído</div>";
-            String blockHtml = "ninguno";
-            if (block != null) {
+            List<TileBlock> nearbyBlocks = blocks.stream()
+                    .sorted(Comparator.comparingInt(item -> Math.abs(item.address() - candidate.offset())))
+                    .limit(6).toList();
+            StringBuilder previewHtml = new StringBuilder();
+            for (TileBlock block : nearbyBlocks) {
+                int distance = Math.abs(block.address() - candidate.offset());
                 String previewName = "tiles_" + id + "_" + block.file().getName().replace(".bin", ".png");
                 renderTiles(rom, candidate.offset(), Files.readAllBytes(block.file().toPath()),
                         new File(assets, previewName));
-                previewHtml = "<img class=\"tiles\" src=\"" + assetDirectoryName + "/" + previewName
-                        + "\" alt=\"Preview de tiles\">";
-                blockHtml = block.file().getName() + " (distancia 0x"
-                        + Integer.toHexString(Math.abs(block.address() - candidate.offset())).toUpperCase() + ")";
+                previewHtml.append("<figure><div class=\"screen\"><img class=\"tiles\" src=\"")
+                        .append(assetDirectoryName).append('/').append(previewName)
+                        .append("\" alt=\"Preview de tiles\"></div><figcaption>")
+                        .append(block.file().getName()).append(" · Δ0x")
+                        .append(Integer.toHexString(distance).toUpperCase()).append("</figcaption></figure>");
+            }
+            if (nearbyBlocks.isEmpty()) {
+                previewHtml.append("<div class=\"missing\">Sin bloques 4bpp extraídos</div>");
             }
             String refs = candidate.references().stream().map(value -> String.format("%06X", value))
                     .reduce((left, right) -> left + " " + right).orElse("-");
             cards.append("<article class=\"card\"><h2>0x").append(id.toUpperCase()).append("</h2>")
                     .append("<img class=\"palette\" src=\"").append(assetDirectoryName).append('/')
                     .append(paletteName).append("\" alt=\"Paleta\">")
-                    .append("<div class=\"screen\">").append(previewHtml).append("</div>")
-                    .append("<dl><dt>Bloque próximo</dt><dd>").append(blockHtml)
-                    .append("</dd><dt>Referencias</dt><dd>").append(refs).append("</dd></dl></article>\n");
+                    .append("<div class=\"gallery\">").append(previewHtml).append("</div>")
+                    .append("<dl><dt>Referencias</dt><dd>").append(refs).append("</dd></dl></article>\n");
         }
 
         String html = """
@@ -151,14 +155,17 @@ public final class PaletteService {
                 :root{color-scheme:dark}body{margin:0;background:#111;color:#eee;font:14px system-ui,sans-serif}
                 header{position:sticky;top:0;z-index:2;padding:18px 24px;background:#181818;border-bottom:1px solid #444}
                 h1{margin:0 0 8px}header p{margin:4px 0;color:#bbb;max-width:1100px}
-                main{display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:16px;padding:16px}
+                main{display:grid;grid-template-columns:repeat(auto-fit,minmax(620px,1fr));gap:16px;padding:16px}
                 .card{background:#202020;border:1px solid #444;border-radius:8px;padding:12px;min-width:0}
                 h2{font:700 18px ui-monospace,monospace;margin:0 0 10px}.palette{width:256px;height:16px;image-rendering:pixelated;border:1px solid #666}
-                .screen{height:300px;margin-top:12px;background:#080808;display:flex;align-items:center;justify-content:center;overflow:auto;border:1px solid #333}
+                .gallery{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:12px}figure{margin:0;min-width:0}
+                .screen{height:220px;background:#080808;display:flex;align-items:center;justify-content:center;overflow:auto;border:1px solid #333}
                 .tiles{max-width:100%;max-height:100%;image-rendering:pixelated}.missing{color:#888}
+                figcaption{padding:4px 2px;color:#bbb;font:11px ui-monospace,monospace;overflow-wrap:anywhere}
                 dl{display:grid;grid-template-columns:110px 1fr;gap:5px;margin:10px 0 0}dt{color:#aaa}dd{margin:0;font-family:ui-monospace,monospace;overflow-wrap:anywhere}
+                @media(max-width:700px){main{grid-template-columns:1fr}.gallery{grid-template-columns:repeat(2,minmax(0,1fr))}}
                 </style></head><body><header><h1>Paletas referenciadas</h1>
-                <p>Cada cuadrante combina una paleta candidata con el bloque 4bpp extraído cuya dirección es más cercana. La proximidad es una heurística, no una asociación confirmada.</p>
+                <p>Cada cuadrante combina una paleta candidata con los seis bloques 4bpp extraídos cuyas direcciones son más cercanas. La proximidad es una heurística, no una asociación confirmada.</p>
                 <p>Una pantalla real también necesita el tilemap, los atributos de cada tile y la selección de una de las cuatro líneas CRAM.</p></header><main>
                 """ + cards + "</main></body></html>";
         Files.writeString(outputHtml.toPath(), html, StandardCharsets.UTF_8);

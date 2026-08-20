@@ -56,7 +56,7 @@ El informe visual se genera después de una extracción completa:
 java -jar dist/MortalSDK.jar palette report "juego.bin" "extracted" "palette-report.html"
 ```
 
-Cada cuadrante contiene la paleta, una preview coloreada, las posiciones que apuntan a ella y el bloque `data_*.bin` elegido. La selección del bloque se basa únicamente en la menor distancia entre direcciones de ROM; la distancia aparece en la tarjeta para poder valorar la confianza. Los recursos gráficos del informe se guardan junto al HTML en `<nombre>-assets/`.
+Cada cuadrante contiene la paleta, las posiciones que apuntan a ella y previews de los seis bloques `data_*.bin` más próximos. La selección se basa únicamente en la distancia entre direcciones de ROM; cada distancia aparece bajo su imagen para poder valorar la confianza. Los recursos gráficos del informe se guardan junto al HTML en `<nombre>-assets/`.
 
 ## Siguiente comprobación
 
