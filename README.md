@@ -76,6 +76,10 @@ java -jar dist/MortalSDK.jar palette report "juego.bin" "extracted" "palette-rep
 
 Los hallazgos confirmados para Arcade Edition v2.0 están explicados en [docs/palettes.md](docs/palettes.md).
 
+Las hojas lineales de tiles no conservan la composicion que realiza el juego.
+Para capturar pantallas reales, planos separados, sprites, VRAM y las paletas
+activas desde BizHawk, consulte [docs/scene-capture.md](docs/scene-capture.md).
+
 ## Samples desde la CLI
 
 Consultar la tabla:

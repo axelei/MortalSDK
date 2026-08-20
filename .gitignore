@@ -38,3 +38,4 @@ rnc_propack_x64.exe
 *.txt
 *.log
 extracted
+captures/
