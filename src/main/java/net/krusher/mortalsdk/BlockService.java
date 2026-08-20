@@ -68,7 +68,7 @@ public class BlockService {
             if (!extractedFile.getName().startsWith("data_")) {
                 continue;
             }
-            execute(App.config.proPackExe(), "p", "extracted\\" + extractedFile.getName(), "temp.bin");
+            execute(App.config.proPackExe(), "p", extractedFile.getPath(), "temp.bin", "-m=1");
             Log.p(" " + extractedFile.getName());
             String addressHex = extractedFile.getName().substring(5, 11);
             int addressDecimal = Integer.parseInt(addressHex, 16);
@@ -107,15 +107,34 @@ public class BlockService {
 
     public static void injectUncompressedBlocks(File[] extractedFiles, byte[] fileData, String extension) throws IOException {
         for (File extractedFile : extractedFiles) {
-            if (!extractedFile.getName().startsWith(extension)) {
+            if (!extractedFile.getName().startsWith(extension + "_")
+                    || !extractedFile.getName().endsWith("." + extension)) {
                 continue;
             }
             Log.p(" " + extractedFile.getName());
             String addressHex = extractedFile.getName().substring(extractedFile.getName().lastIndexOf('_') + 1, extractedFile.getName().lastIndexOf('.'));
             int addressDecimal = Integer.parseInt(addressHex, 16);
             byte[] uncompressedData = Files.readAllBytes(Paths.get(extractedFile.getAbsolutePath()));
+            int room = matchingRangeSize(extension, addressDecimal);
+            if (room >= 0 && uncompressedData.length != room) {
+                throw new IOException("El bloque " + extractedFile.getName() + " debe medir " + room
+                        + " bytes, pero mide " + uncompressedData.length);
+            }
             System.arraycopy(uncompressedData, 0, fileData, addressDecimal, uncompressedData.length);
         }
+    }
+
+    private static int matchingRangeSize(String extension, int address) {
+        Set<Range> ranges = switch (extension) {
+            case "pcm" -> App.config.sounds();
+            case "music" -> App.config.music();
+            default -> App.config.bins();
+        };
+        return ranges.stream()
+                .filter(range -> range.getFrom() == address)
+                .map(range -> range.getTo() - range.getFrom() + 1)
+                .findFirst()
+                .orElse(-1);
     }
 
     public static void extractUncompressedBlock(Set<Range> ranges, String extension, byte[] fileData) throws IOException {

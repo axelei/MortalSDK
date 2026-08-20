@@ -36,4 +36,5 @@ build/
 rnc_propack_x64.exe
 *.bin
 *.txt
+*.log
 extracted

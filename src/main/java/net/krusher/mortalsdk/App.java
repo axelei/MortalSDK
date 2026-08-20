@@ -8,6 +8,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.List;
+import javax.swing.SwingUtilities;
 
 /**
  * MortalSDK by Krusher
@@ -21,6 +22,11 @@ public class App {
 
         Log.pnl("MortalSDK by Krusher - Programa bajo licencia GPL 3");
 
+        if (args.length > 0 && args[0].equals("sample")) {
+            SampleCli.run(args);
+            return;
+        }
+
         //check parameters
         if (args.length < 2) {
             displayHelp();
@@ -32,6 +38,18 @@ public class App {
             config = Config.getInstance(args[2]);
         } else {
             config = new Config();
+        }
+
+        if (args[0].equals("gui")) {
+            Config guiConfig = config;
+            SwingUtilities.invokeLater(() -> {
+                try {
+                    new SampleEditor(new File(args[1]), guiConfig).show();
+                } catch (IOException e) {
+                    SampleEditor.showError(null, e);
+                }
+            });
+            return;
         }
 
         //parse tbl if exists
@@ -57,9 +75,13 @@ public class App {
         if (StringUtils.isNotBlank(config.proPackExe())) {
             Log.pnl("Extrayendo bloques...");
             BlockService.extractCompressedBlocks(file);
+            TileService.exportPreviews(new File("extracted"), 16);
         }
         Log.pnl("Extrayendo datos sin comprimir...");
         BlockService.extractUncompressedBlock(config.sounds(), "pcm", fileData);
+        WavService.exportPcmFiles(new File("extracted"), config.pcmSampleRate());
+        SampleTableService.exportSamples(fileData, new File("extracted/samples"), config);
+        BlockService.extractUncompressedBlock(config.music(), "music", fileData);
         BlockService.extractUncompressedBlock(config.bins(), "bin", fileData);
         Log.pnl("Extrayendo textos...");
         List<Texticle> texts = TexticleService.findTexticles(fileData);
@@ -78,12 +100,16 @@ public class App {
         if (extractedFiles == null || extractedFiles.length == 0) {
             Log.pnl("No se encontraron archivos extraídos en la carpeta 'extracted'");
         } else {
+            TileService.importPreviews(extractedDir);
             if (StringUtils.isNotBlank(config.proPackExe())) {
                 Log.p("Inyectando bloques comprimidos:");
                 BlockService.injectCompressedBlocks(extractedFiles, fileData);
             }
             Log.p("Inyectando bloques sin comprimir: ");
             BlockService.injectUncompressedBlocks(extractedFiles, fileData, "pcm");
+            WavService.injectWavFiles(extractedFiles, fileData);
+            SampleTableService.injectSamples(fileData, new File("extracted/samples"), config);
+            BlockService.injectUncompressedBlocks(extractedFiles, fileData, "music");
             BlockService.injectUncompressedBlocks(extractedFiles, fileData, "bin");
             Log.pnl();
         }
@@ -102,7 +128,11 @@ public class App {
         Log.pnl("Debe especificarse modo y archivo");
         Log.pnl("Ejemplos: x \"rom a extraer.bin\" [\"configuracion\"]");
         Log.pnl("          i \"rom a inyectar.bin\" [\"configuracion\"]");
-        Log.pnl("Modo: x = extraer, i = inyectar");
+        Log.pnl("          gui \"rom.bin\" \"configuracion\"");
+        Log.pnl("          sample list \"rom.bin\" \"configuracion\"");
+        Log.pnl("          sample extract \"rom.bin\" \"directorio\" \"configuracion\"");
+        Log.pnl("          sample replace \"rom.bin\" \"salida.bin\" \"configuracion\" ID \"audio.wav\" [ID \"audio.wav\" ...]");
+        Log.pnl("Modo: x = extraer, i = inyectar, gui = editor de muestras");
         Log.pnl("Configuracion: Opcional, se puede dejar en blanco y se usará una por defecto.");
         Log.pnl("Ejemplos de configuracion en el directorio \"configs\".");
     }

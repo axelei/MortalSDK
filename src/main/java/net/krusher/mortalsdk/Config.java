@@ -13,34 +13,45 @@ import java.util.Set;
 public record Config(int minChars,
                      Set<Range> textRanges,
                      Set<Range> sounds,
+                     Set<Range> music,
                      Set<Range> bins,
                      Set<Range> spaceRanges,
-                     String proPackExe) {
+                     String proPackExe,
+                     int pcmSampleRate,
+                     int sampleTableOffset,
+                     int sampleCount) {
 
     private static final int DEFAULT_MIN_CHARS = 5;
 
     public Config() {
-        this(DEFAULT_MIN_CHARS, Set.of(), Set.of(), Set.of(), Set.of(), null);
+        this(DEFAULT_MIN_CHARS, Set.of(), Set.of(), Set.of(), Set.of(), Set.of(), null, 7040, -1, 0);
     }
 
     public static Config getInstance(String fileName) throws IOException {
         Properties properties = new Properties();
         File configFile = new File(fileName);
-        InputStream stream = new FileInputStream(configFile);
-        properties.load(stream);
+        try (InputStream stream = new FileInputStream(configFile)) {
+            properties.load(stream);
+        }
 
         int minChars = Integer.parseInt(properties.getProperty("minChars", String.valueOf(DEFAULT_MIN_CHARS)));
         String textRangesStr = properties.getProperty("textRanges");
         Set<Range> textRanges = parseRanges(textRangesStr);
         String soundsStr = properties.getProperty("sounds");
         Set<Range> sounds = parseRanges(soundsStr);
+        String musicStr = properties.getProperty("music");
+        Set<Range> music = parseRanges(musicStr);
         String binsStr = properties.getProperty("bins");
         Set<Range> bins = parseRanges(binsStr);
         String spaceRangesStr = properties.getProperty("spaceRanges");
         Set<Range> spaceRanges = parseRanges(spaceRangesStr);
         String proPackExe = properties.getProperty("proPackExe", null);
+        int pcmSampleRate = Integer.parseInt(properties.getProperty("pcmSampleRate", "7040"));
+        int sampleTableOffset = Integer.decode(properties.getProperty("sampleTableOffset", "-1"));
+        int sampleCount = Integer.parseInt(properties.getProperty("sampleCount", "0"));
 
-        return new Config(minChars, textRanges, sounds, bins, spaceRanges, proPackExe);
+        return new Config(minChars, textRanges, sounds, music, bins, spaceRanges, proPackExe,
+                pcmSampleRate, sampleTableOffset, sampleCount);
     }
 
     private static Set<Range> parseRanges(String string) {

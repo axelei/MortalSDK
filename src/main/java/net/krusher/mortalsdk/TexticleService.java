@@ -194,12 +194,12 @@ public class TexticleService {
             String oldText = new String(textData, StandardCharsets.ISO_8859_1);
             Log.p("Alerta: El texto leído \"{0}\" tiene {1} caracteres, pero el texto original tenía {2} caracteres. ", oldText, textData.length, room);
             if (Objects.isNull(pointerAddress)) {
-                writeCutText(textData, fileData, address);
+                writeCutText(textData, fileData, address, room);
                 return;
             }
             Integer newAddress = getNewAddress(textData.length);
             if (Objects.isNull(newAddress)) {
-                writeCutText(textData, fileData, address);
+                writeCutText(textData, fileData, address, room);
                 return;
             }
 
@@ -213,21 +213,17 @@ public class TexticleService {
             writeThreeBytes(fileData, pointerAddress, newAddress);
         }
     }
-    private static void writeCutText(byte[] textData, byte[] fileData, int address) {
+    static void writeCutText(byte[] textData, byte[] fileData, int address, int room) {
         Log.pnl("Se cortará el texto.");
-        System.arraycopy(textData, 0, fileData, address, textData.length);
+        System.arraycopy(textData, 0, fileData, address, room);
     }
 
     public static Integer getNewAddress(int size) {
-        Optional<Range> range = App.config.spaceRanges().stream().findFirst();
-        // No more ranges
+        Optional<Range> range = App.config.spaceRanges().stream()
+                .filter(candidate -> candidate.getTo() - candidate.getFrom() + 1 >= size)
+                .min(java.util.Comparator.comparingInt(Range::getFrom));
         if (range.isEmpty()) {
             return null;
-        }
-        // No more space, remove and try next
-        if (range.get().getFrom() > range.get().getTo()) {
-            App.config.spaceRanges().remove(range.get());
-            return getNewAddress(size);
         }
 
         int newAddress = range.get().getFrom();
