@@ -50,6 +50,7 @@ local function capture()
 end
 
 console.log("MortalSDK capture ready. Press F8 in the emulator window.")
+client.unpause()
 while true do
   local down = input.get()["F8"] == true
   if down and not key_was_down then capture() end
