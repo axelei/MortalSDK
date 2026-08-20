@@ -141,6 +141,7 @@ public class App {
         Log.pnl("          sample replace \"rom.bin\" \"salida.bin\" \"configuracion\" ID \"audio.wav\" [ID \"audio.wav\" ...]");
         Log.pnl("          palette scan \"rom.bin\" \"directorio\"");
         Log.pnl("          palette render \"rom.bin\" OFFSET \"tiles.bin\" \"salida.png\"");
+        Log.pnl("          palette report \"rom.bin\" \"extracted\" \"paletas.html\"");
         Log.pnl("Modo: x = extraer, i = inyectar, gui = editor de muestras");
         Log.pnl("Configuracion: opcional solo en los modos x e i; obligatoria para gui y sample.");
         Log.pnl("Ejemplos de configuracion en el directorio \"configs\".");

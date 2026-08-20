@@ -15,6 +15,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Comparator;
 
 public final class PaletteService {
 
@@ -103,6 +104,92 @@ public final class PaletteService {
         }
     }
 
+    public static void exportHtmlReport(byte[] rom, List<PaletteCandidate> candidates,
+                                        File extractedDirectory, File outputHtml) throws IOException {
+        List<TileBlock> blocks = findTileBlocks(extractedDirectory);
+        File parent = outputHtml.getAbsoluteFile().getParentFile();
+        if (parent != null) {
+            Files.createDirectories(parent.toPath());
+        }
+        String assetDirectoryName = stripExtension(outputHtml.getName()) + "-assets";
+        File assets = new File(parent, assetDirectoryName);
+        Files.createDirectories(assets.toPath());
+
+        StringBuilder cards = new StringBuilder();
+        for (PaletteCandidate candidate : candidates) {
+            byte[] raw = Arrays.copyOfRange(rom, candidate.offset(), candidate.offset() + PALETTE_BYTES);
+            String id = String.format("%06x", candidate.offset());
+            String paletteName = "palette_" + id + ".png";
+            ImageIO.write(renderPalette(raw, 16), "png", new File(assets, paletteName));
+            TileBlock block = blocks.stream().min(Comparator.comparingInt(item ->
+                    Math.abs(item.address() - candidate.offset()))).orElse(null);
+            String previewHtml = "<div class=\"missing\">Sin bloque 4bpp extraído</div>";
+            String blockHtml = "ninguno";
+            if (block != null) {
+                String previewName = "tiles_" + id + "_" + block.file().getName().replace(".bin", ".png");
+                renderTiles(rom, candidate.offset(), Files.readAllBytes(block.file().toPath()),
+                        new File(assets, previewName));
+                previewHtml = "<img class=\"tiles\" src=\"" + assetDirectoryName + "/" + previewName
+                        + "\" alt=\"Preview de tiles\">";
+                blockHtml = block.file().getName() + " (distancia 0x"
+                        + Integer.toHexString(Math.abs(block.address() - candidate.offset())).toUpperCase() + ")";
+            }
+            String refs = candidate.references().stream().map(value -> String.format("%06X", value))
+                    .reduce((left, right) -> left + " " + right).orElse("-");
+            cards.append("<article class=\"card\"><h2>0x").append(id.toUpperCase()).append("</h2>")
+                    .append("<img class=\"palette\" src=\"").append(assetDirectoryName).append('/')
+                    .append(paletteName).append("\" alt=\"Paleta\">")
+                    .append("<div class=\"screen\">").append(previewHtml).append("</div>")
+                    .append("<dl><dt>Bloque próximo</dt><dd>").append(blockHtml)
+                    .append("</dd><dt>Referencias</dt><dd>").append(refs).append("</dd></dl></article>\n");
+        }
+
+        String html = """
+                <!doctype html><html lang="es"><head><meta charset="utf-8">
+                <meta name="viewport" content="width=device-width,initial-scale=1">
+                <title>Informe de paletas MortalSDK</title><style>
+                :root{color-scheme:dark}body{margin:0;background:#111;color:#eee;font:14px system-ui,sans-serif}
+                header{position:sticky;top:0;z-index:2;padding:18px 24px;background:#181818;border-bottom:1px solid #444}
+                h1{margin:0 0 8px}header p{margin:4px 0;color:#bbb;max-width:1100px}
+                main{display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:16px;padding:16px}
+                .card{background:#202020;border:1px solid #444;border-radius:8px;padding:12px;min-width:0}
+                h2{font:700 18px ui-monospace,monospace;margin:0 0 10px}.palette{width:256px;height:16px;image-rendering:pixelated;border:1px solid #666}
+                .screen{height:300px;margin-top:12px;background:#080808;display:flex;align-items:center;justify-content:center;overflow:auto;border:1px solid #333}
+                .tiles{max-width:100%;max-height:100%;image-rendering:pixelated}.missing{color:#888}
+                dl{display:grid;grid-template-columns:110px 1fr;gap:5px;margin:10px 0 0}dt{color:#aaa}dd{margin:0;font-family:ui-monospace,monospace;overflow-wrap:anywhere}
+                </style></head><body><header><h1>Paletas referenciadas</h1>
+                <p>Cada cuadrante combina una paleta candidata con el bloque 4bpp extraído cuya dirección es más cercana. La proximidad es una heurística, no una asociación confirmada.</p>
+                <p>Una pantalla real también necesita el tilemap, los atributos de cada tile y la selección de una de las cuatro líneas CRAM.</p></header><main>
+                """ + cards + "</main></body></html>";
+        Files.writeString(outputHtml.toPath(), html, StandardCharsets.UTF_8);
+    }
+
+    private static List<TileBlock> findTileBlocks(File extractedDirectory) {
+        File[] files = extractedDirectory.listFiles((directory, name) ->
+                name.startsWith("data_") && name.endsWith(".bin"));
+        if (files == null) {
+            return List.of();
+        }
+        List<TileBlock> result = new ArrayList<>();
+        for (File file : files) {
+            if (file.length() == 0 || file.length() % 32 != 0) {
+                continue;
+            }
+            try {
+                int address = Integer.parseInt(file.getName().substring(5, 11), 16);
+                result.add(new TileBlock(address, file));
+            } catch (RuntimeException ignored) {
+                // Ignore files that do not follow the extractor naming convention.
+            }
+        }
+        return result;
+    }
+
+    private static String stripExtension(String name) {
+        int dot = name.lastIndexOf('.');
+        return dot > 0 ? name.substring(0, dot) : name;
+    }
+
     static BufferedImage renderPalette(byte[] raw, int scale) {
         if (raw.length != PALETTE_BYTES || scale < 1) {
             throw new IllegalArgumentException("Una paleta Mega Drive debe contener 32 bytes");
@@ -180,4 +267,6 @@ public final class PaletteService {
     }
 
     public record PaletteCandidate(int offset, List<Integer> references) {}
+
+    private record TileBlock(int address, File file) {}
 }

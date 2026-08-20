@@ -65,11 +65,14 @@ Los PNG son imágenes de índices, no gráficos con la paleta real del juego: ca
 ```powershell
 java -jar dist/MortalSDK.jar palette scan "juego.bin" "paletas"
 java -jar dist/MortalSDK.jar palette render "juego.bin" 0x19597A "extracted/data_1959bc.bin" "preview.png"
+java -jar dist/MortalSDK.jar palette report "juego.bin" "extracted" "palette-report.html"
 ```
 
 `palette scan` busca direcciones de ROM referenciadas por punteros y cuyos 32 bytes cumplen el formato CRAM de Mega Drive. Exporta el binario, una muestra PNG, una hoja conjunta y un CSV con las referencias. Es un detector de candidatos: una coincidencia debe confirmarse mediante la tabla o rutina que la usa.
 
 `palette render` aplica un candidato a un bloque lineal de tiles para comprobarlo visualmente. No interpreta mapas de tiles ni el selector de línea de paleta de sus atributos, por lo que un bloque que use varias líneas CRAM no se verá completamente correcto con una sola paleta.
+
+`palette report` genera un HTML en cuadrícula con todas las tiras de color, referencias y previews. Para cada paleta usa el bloque 4bpp extraído cuya dirección es más cercana y muestra la distancia, por lo que sirve para inspección rápida pero no confirma por sí solo la asociación.
 
 Los hallazgos confirmados para Arcade Edition v2.0 están explicados en [docs/palettes.md](docs/palettes.md).
 

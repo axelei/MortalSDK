@@ -48,6 +48,16 @@ palette-references.csv
 
 El número 107 no debe interpretarse como “107 paletas únicas usadas por el juego”: puede incluir subpaletas solapadas, tablas duplicadas o falsos positivos. Las dos tablas anteriores son el subconjunto confirmado actualmente.
 
+## Informe HTML
+
+El informe visual se genera después de una extracción completa:
+
+```powershell
+java -jar dist/MortalSDK.jar palette report "juego.bin" "extracted" "palette-report.html"
+```
+
+Cada cuadrante contiene la paleta, una preview coloreada, las posiciones que apuntan a ella y el bloque `data_*.bin` elegido. La selección del bloque se basa únicamente en la menor distancia entre direcciones de ROM; la distancia aparece en la tarjeta para poder valorar la confianza. Los recursos gráficos del informe se guardan junto al HTML en `<nombre>-assets/`.
+
 ## Siguiente comprobación
 
 Para asociar correctamente colores y gráficos todavía hacen falta los mapas de tiles. Los atributos del mapa seleccionan una de las cuatro líneas de CRAM, además de prioridad y volteos. Una preview lineal con una única línea de 16 colores permite descartar combinaciones, pero no reconstruir por sí sola una pantalla completa.
