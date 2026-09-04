@@ -99,6 +99,18 @@ Un mismo bloque de gráficos puede dar servicio a varias pantallas. En ese caso 
 
 Ojo: si al inyectar un bloque se reubica por no caber, cambia de dirección, y entonces las direcciones de `scenes` se quedan viejas para esa ROM parcheada. Para volver a extraer de ella hay que actualizarlas.
 
+#### Bloques sin comprimir
+
+Hay trozos de la ROM con tiles que no están comprimidos. Se listan con la propiedad `bins`, con la primera y la última dirección de cada uno, y salen como `bin_019c00.png` igual que los demás gráficos:
+
+```properties
+bins=105472,107040
+```
+
+Van y vuelven byte a byte, así que un bloque que no sean gráficos se ve como ruido pero no se estropea. La imagen puede tener más tiles que el bloque, porque la última fila se rellena; al inyectar se recorta al tamaño del hueco, que se saca de la propia propiedad.
+
+Estos bloques nunca se reubican ni cambian de tamaño: no tienen por qué ser direccionables por puntero, así que la imagen tiene que caber en su hueco.
+
 #### Paletas
 
 Una línea de paleta de Mega Drive son 16 palabras big-endian con el formato `0000 BBB0 GGG0 RRR0`. El color 0 es transparente —en pantalla se ve el color de fondo del VDP, no lo que guarde la paleta—, así que se dibuja negro, que es lo que se ve.
@@ -134,7 +146,7 @@ Con los samples PCM se sigue este criterio:
 
 Se admite cualquier WAV PCM de 8 o 16 bits, mono o estéreo, y a cualquier frecuencia: no se remuestrea, se escribe en la tabla la velocidad de reproducción más parecida a la del WAV. El máximo que alcanza el reproductor de la ROM son unos 13,8 kHz.
 
-Los bloques de `bins` nunca se reubican ni cambian de tamaño, porque no tienen por qué ser direccionables por puntero.
+Con los bloques de `bins` se sigue el mismo criterio: el que ya no tenga PNG en `extracted` y el que no haya cambiado se quedan como estaban. No se reubican ni cambian de tamaño, porque no tienen por qué ser direccionables por puntero.
 
 ### Parche IPS
 
@@ -199,6 +211,7 @@ Sólo necesitas ejecutar: `mvn clean package`. En la carpeta `dist` tendrás el 
 
 ## Cambios recientes
 
+- Los bloques sin comprimir de `bins` también se extraen y se inyectan como PNG, no en crudo.
 - Al inyectar se escribe también un parche `.ips` con lo que ha cambiado, que es lo que se reparte.
 - Los créditos y los demás bloques de textos encadenados se reubican enteros, no línea a línea.
 - Los punteros del fichero de textos se repasan al inyectar, así que los ficheros ya empezados siguen valiendo sin volver a extraer.

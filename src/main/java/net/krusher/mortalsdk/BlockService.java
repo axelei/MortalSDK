@@ -3,11 +3,7 @@ package net.krusher.mortalsdk;
 import org.apache.commons.lang3.StringUtils;
 
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -19,6 +15,9 @@ import java.util.Objects;
 import java.util.Set;
 
 public class BlockService {
+
+    /** Los bloques sin comprimir también se guardan como imagen, igual que los comprimidos. */
+    private static final String UNCOMPRESSED_EXTENSION = "png";
 
     private BlockService() {}
 
@@ -209,34 +208,41 @@ public class BlockService {
      * deja como estaba, porque no tienen por qué ser direccionables por puntero.
      */
     public static void injectUncompressedBlocks(File[] extractedFiles, byte[] fileData, byte[] originalData,
-                                                String extension, Set<Range> ranges) throws IOException {
+                                                String prefix, Set<Range> ranges) throws IOException {
         Map<Integer, Range> rangesByAddress = new HashMap<>();
         for (Range range : ranges) {
             rangesByAddress.put(range.getFrom(), range);
         }
+        Map<Integer, Integer> palettes = PaletteService.detect(originalData, startsOf(ranges));
         Set<Integer> found = new HashSet<>();
         for (File extractedFile : extractedFiles) {
             String name = extractedFile.getName();
-            if (!name.startsWith(extension + "_")) {
+            if (!name.startsWith(prefix + "_")) {
+                continue;
+            }
+            if (!name.endsWith("." + UNCOMPRESSED_EXTENSION)) {
+                Log.pnl();
+                Log.p("{0} es de una versión anterior, que guardaba estos bloques en crudo. Se pasa de él; "
+                        + "hay que volver a extraer para tenerlo en PNG.", name);
                 continue;
             }
             int address = parseAddress(name);
-            found.add(address);
-            byte[] blockData = Files.readAllBytes(extractedFile.toPath());
             Range range = rangesByAddress.get(address);
-            int room = Objects.nonNull(range) ? range.size() : blockData.length;
-            if (isUnmodified(blockData, originalData, address, room)) {
+            if (Objects.isNull(range)) {
+                Log.pnl();
+                Log.p("{0} no está en la propiedad bins, así que no se sabe cuánto ocupa su hueco. "
+                        + "No se inyectará.", name);
                 continue;
             }
-            if (blockData.length > room) {
-                Log.pnl();
-                Log.p("El bloque {0} ocupa {1} bytes, más que los {2} de su hueco, y no se puede reubicar. No se inyectará.",
-                        name, blockData.length, room);
+            found.add(address);
+            int room = range.size();
+            int[] palette = PaletteService.forBlock(address, originalData, palettes);
+            byte[] blockData = TileService.toTiles(Png.read(extractedFile), palette, room);
+            if (isUnmodified(blockData, originalData, address)) {
                 continue;
             }
             Log.p(" " + name);
             System.arraycopy(blockData, 0, fileData, address, blockData.length);
-            Arrays.fill(fileData, address + blockData.length, address + room, (byte) 0x00);
         }
         for (Range range : ranges) {
             if (!found.contains(range.getFrom())) {
@@ -246,9 +252,8 @@ public class BlockService {
         }
     }
 
-    private static boolean isUnmodified(byte[] blockData, byte[] originalData, int address, int room) {
-        return blockData.length == room
-                && Arrays.equals(blockData, 0, blockData.length, originalData, address, address + blockData.length);
+    private static boolean isUnmodified(byte[] blockData, byte[] originalData, int address) {
+        return Arrays.equals(blockData, 0, blockData.length, originalData, address, address + blockData.length);
     }
 
     private static int parseAddress(String fileName) {
@@ -256,17 +261,30 @@ public class BlockService {
     }
 
 
-    public static void extractUncompressedBlock(Set<Range> ranges, String extension, byte[] fileData) throws IOException {
+    /**
+     * Saca los bloques sin comprimir de la ROM como PNG, igual que los comprimidos: son tiles de Mega Drive
+     * y se editan mejor mirándolos que en hexadecimal. La conversión es byte a byte, así que un bloque que
+     * no sean gráficos se ve como ruido pero va y vuelve igual.
+     */
+    public static void extractUncompressedBlock(Set<Range> ranges, String prefix, byte[] fileData) throws IOException {
+        Map<Integer, Integer> palettes = PaletteService.detect(fileData, startsOf(ranges));
         for (Range range : ranges) {
-            int start = range.getFrom();
-            int end = range.getTo();
-            byte[] block = new byte[end - start + 1];
-            System.arraycopy(fileData, start, block, 0, end - start + 1);
-            String fileName = "extracted/" + extension + "_" + toHexStringPadded(start) + "." + extension;
-            FileOutputStream fos = new FileOutputStream(fileName);
-            fos.write(block);
-            fos.close();
+            byte[] block = Arrays.copyOfRange(fileData, range.getFrom(), range.getTo() + 1);
+            int[] palette = PaletteService.forBlock(range.getFrom(), fileData, palettes);
+            Png.write(TileService.toBitmap(block, palette), fileOf(prefix, range.getFrom()));
         }
+    }
+
+    private static File fileOf(String prefix, int address) {
+        return new File("extracted", prefix + "_" + toHexStringPadded(address) + "." + UNCOMPRESSED_EXTENSION);
+    }
+
+    private static Set<Integer> startsOf(Set<Range> ranges) {
+        Set<Integer> addresses = new HashSet<>();
+        for (Range range : ranges) {
+            addresses.add(range.getFrom());
+        }
+        return addresses;
     }
 
     public static String toHexStringPadded(int address) {
