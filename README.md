@@ -146,6 +146,27 @@ Con los samples PCM se sigue este criterio:
 
 Se admite cualquier WAV PCM de 8 o 16 bits, mono o estéreo, y a cualquier frecuencia: no se remuestrea, se escribe en la tabla la velocidad de reproducción más parecida a la del WAV. El máximo que alcanza el reproductor de la ROM son unos 13,8 kHz.
 
+#### El espacio libre
+
+De `spaceRanges` tiran los textos, los bloques comprimidos y los samples, y siempre se coge el hueco más bajo donde quepa, así que el reparto no depende del orden en que estén escritos los rangos.
+
+Cuando algo se mueve, el hueco que deja vuelve al espacio libre y lo puede aprovechar lo siguiente que no quepa. Los huecos que quedan pegados unos a otros se juntan, para que no se pierda nada por el camino:
+
+```
+sample_02_1e38fc.wav ocupa 5.528 bytes, más que los 2.764 de su hueco: se mueve a 3f2a20.
+Queda libre el hueco de 1e38fc a 1e43c7, 2.764 bytes.
+...
+Moviendo el texto a la dirección 1e38fc
+```
+
+Un hueco sólo se suelta si de verdad era sólo de quien lo deja:
+
+- Los samples se apuntan unos a otros. En esta ROM hay entradas distintas que van al mismo sitio y otras que son un trozo de la de al lado, así que el hueco de un sample sólo se libera si ningún otro de la tabla toca esos bytes.
+- Con los bloques comprimidos se mira lo mismo, aunque en esta ROM ninguno se pisa con otro.
+- El hueco de un texto que se mueve, o de una cadena entera, sí se suelta siempre: lo que apuntaba ahí es justo el puntero que se acaba de retocar.
+
+Un texto que se reubica lleva su terminador detrás, porque el hueco que le toque puede ser uno reciclado y lo que haya después no tiene por qué ser un cero.
+
 Con los bloques de `bins` se sigue el mismo criterio: el que ya no tenga PNG en `extracted` y el que no haya cambiado se quedan como estaban. No se reubican ni cambian de tamaño, porque no tienen por qué ser direccionables por puntero.
 
 ### Rutinas anuladas
@@ -223,6 +244,8 @@ Sólo necesitas ejecutar: `mvn clean package`. En la carpeta `dist` tendrás el 
 
 ## Cambios recientes
 
+- El hueco que deja algo que se mueve vuelve al espacio libre, y lo aprovecha lo siguiente que no quepa.
+- El espacio libre se reparte siempre por el hueco más bajo donde quepa, y no por el orden en que estén escritos los rangos.
 - Los avisos de los samples dicen el nombre del fichero, no el número del sample.
 - La propiedad `skipRoutines` anula rutinas con un `rts`; con ella se quita el logo de Sega y la intro pasa a ser lo primero que se ve.
 - Los bloques sin comprimir de `bins` también se extraen y se inyectan como PNG, no en crudo.

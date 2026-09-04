@@ -162,13 +162,15 @@ public class BlockService {
 
         for (Map.Entry<Integer, byte[]> entry : pending.entrySet()) {
             injectCompressedBlock(entry.getKey(), entry.getValue(), origin.get(entry.getKey()),
-                    room.get(entry.getKey()), fileData, originalData);
+                    room.get(entry.getKey()), fileData, originalData,
+                    isAlone(entry.getKey(), room.get(entry.getKey()), blocks));
         }
         Log.pnl();
     }
 
     private static void injectCompressedBlock(int address, byte[] blockData, String name, Integer originalSize,
-                                              byte[] fileData, byte[] originalData) throws IOException {
+                                              byte[] fileData, byte[] originalData, boolean canFree)
+            throws IOException {
         byte[] compressedData;
         try {
             compressedData = RncService.pack(blockData, RncService.METHOD_1);
@@ -195,9 +197,23 @@ public class BlockService {
             System.arraycopy(compressedData, 0, fileData, newAddress, compressedData.length);
             TexticleService.writeThreeBytes(fileData, pointer, newAddress);
             Arrays.fill(fileData, address, address + originalSize, (byte) 0x00);
+            if (canFree) {
+                TexticleService.freeSpace(address, originalSize);
+            }
         } else {
             Log.pnl("No se inyectará.");
         }
+    }
+
+    /** Si en ese hueco no hay ningún otro bloque metido, que entonces no se podría liberar. */
+    private static boolean isAlone(int address, int size, List<RncService.Block> blocks) {
+        for (RncService.Block block : blocks) {
+            if (block.address() != address
+                    && block.address() < address + size && address < block.address() + block.packedSize()) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**

@@ -41,8 +41,8 @@ public record Config(int minChars,
     public static final int NONE = -1;
 
     public Config() {
-        this(DEFAULT_MIN_CHARS, Set.of(), Set.of(), Set.of(), Map.of(), Map.of(), Set.of(), null, Set.of(),
-                Set.of(), Set.of());
+        this(DEFAULT_MIN_CHARS, Set.of(), Set.of(), new HashSet<>(), Map.of(), Map.of(), Set.of(), null,
+                Set.of(), Set.of(), Set.of());
     }
 
     public static Config getInstance(String fileName) throws IOException {
@@ -120,11 +120,12 @@ public record Config(int minChars,
         return Integer.parseInt(trimmed, 16);
     }
 
+    /** El conjunto que sale de aquí es modificable: a spaceRanges se le añaden los huecos que se liberan. */
     private static Set<Range> parseRanges(String string) {
-        if (StringUtils.isBlank(string)) {
-            return Set.of();
-        }
         Set<Range> result = new HashSet<>();
+        if (StringUtils.isBlank(string)) {
+            return result;
+        }
         String[] ranges = string.split("#");
         for (String range : ranges) {
             result.add(Range.of(

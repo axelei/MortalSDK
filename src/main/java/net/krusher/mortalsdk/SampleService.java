@@ -173,7 +173,7 @@ public final class SampleService {
                 continue;
             }
             found.add(id);
-            injectSample(sample, file, fileData, originalData);
+            injectSample(sample, file, fileData, originalData, isAlone(sample, table));
         }
         List<String> deleted = new ArrayList<>();
         for (Sample sample : table) {
@@ -187,7 +187,27 @@ public final class SampleService {
         }
     }
 
-    private static void injectSample(Sample sample, File file, byte[] fileData, byte[] originalData) throws IOException {
+    /**
+     * Si los bytes de este sample no los comparte ningún otro de la tabla.
+     * <p>
+     * En esta ROM es de lo más normal que sí: hay entradas distintas que apuntan al mismo sitio y otras que
+     * son un trozo de la de al lado. El hueco de uno así no se puede dar por libre aunque se mueva.
+     */
+    private static boolean isAlone(Sample sample, List<Sample> table) {
+        for (Sample other : table) {
+            if (other.entryAddress() == sample.entryAddress() || other.isEmpty()) {
+                continue;
+            }
+            if (other.offset() < sample.offset() + sample.length()
+                    && sample.offset() < other.offset() + other.length()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static void injectSample(Sample sample, File file, byte[] fileData, byte[] originalData,
+                                     boolean canFree) throws IOException {
         WavService.WavData wav = WavService.read(file);
         byte[] pcm = wav.pcm();
         int rate = rateOf(wav.sampleRate());
@@ -218,6 +238,10 @@ public final class SampleService {
             Log.pnl();
             Log.pnl("{0} ocupa {1} bytes, más que los {2} de su hueco: se mueve a {3}.",
                     file.getName(), pcm.length, sample.length(), toHex(offset));
+            // los samples se apuntan unos a otros, así que el hueco sólo se suelta si era sólo suyo
+            if (canFree) {
+                TexticleService.freeSpace(sample.offset(), sample.length());
+            }
         }
         // Los samples van pegados unos a otros, así que si el nuevo es más corto no se rellena el sobrante:
         // solo se acorta la longitud de la entrada.

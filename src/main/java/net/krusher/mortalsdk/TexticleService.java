@@ -12,8 +12,8 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Iterator;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Set;
 
 public class TexticleService {
@@ -497,6 +497,7 @@ public class TexticleService {
         Log.pnl("Se mueve entera a {0}.", Integer.toHexString(newAddress));
         packChain(encoded, fileData, newAddress, needed + 1);
         Arrays.fill(fileData, head.address(), head.address() + room, TERMINATOR);
+        freeSpace(head.address(), room);
     }
 
     /** Escribe los textos uno detrás de otro separados por el terminador, y rellena lo que sobre. */
@@ -565,7 +566,9 @@ public class TexticleService {
             writeCutText(textData, fileData, address, room);
             return;
         }
-        Integer newAddress = getNewAddress(textData.length);
+        // se pide un byte de más para el terminador: el hueco puede ser uno reciclado, y entonces lo que
+        // haya detrás no tiene por qué ser un cero
+        Integer newAddress = getNewAddress(textData.length + 1);
         if (Objects.isNull(newAddress)) {
             writeCutText(textData, fileData, address, room);
             return;
@@ -584,6 +587,8 @@ public class TexticleService {
 
         Log.pnl("Moviendo el texto a la dirección {0}", Integer.toHexString(newAddress));
         System.arraycopy(textData, 0, fileData, newAddress, textData.length);
+        fileData[newAddress + textData.length] = TERMINATOR;
+        freeSpace(address, room);
     }
 
     private static void writeCutText(byte[] textData, byte[] fileData, int address, int room) {
@@ -596,29 +601,58 @@ public class TexticleService {
     }
 
     /**
-     * Reserva espacio libre. Si bankSize no es cero, el bloque no cruzará ninguna frontera de ese tamaño,
-     * porque el reproductor de samples direcciona la ROM por ventanas de banco.
+     * Reserva espacio libre. Se coge el hueco más bajo donde quepa, para que el reparto no dependa del orden
+     * en que estén guardados los rangos. Si bankSize no es cero, el bloque no cruzará ninguna frontera de ese
+     * tamaño, porque el reproductor de samples direcciona la ROM por ventanas de banco.
      */
     public static Integer getNewAddress(int size, int bankSize) {
-        Optional<Range> range = App.config.spaceRanges().stream().findFirst();
-        // No quedan rangos
-        if (range.isEmpty()) {
-            return null;
+        List<Range> ranges = new ArrayList<>(App.config.spaceRanges());
+        ranges.sort(Comparator.comparingInt(Range::getFrom));
+        for (Range range : ranges) {
+            int from = range.getFrom();
+            // el bloque cruzaría un banco, se empieza en el siguiente
+            if (bankSize > 0 && from % bankSize + size > bankSize) {
+                from = (from / bankSize + 1) * bankSize;
+            }
+            if (from + size - 1 > range.getTo()) {
+                continue;
+            }
+            range.setFrom(from + size + 1);
+            if (range.getFrom() > range.getTo()) {
+                App.config.spaceRanges().remove(range);
+            }
+            return from;
         }
-        // El bloque cruzaría un banco, se salta al principio del siguiente
-        if (bankSize > 0 && range.get().getFrom() % bankSize + size > bankSize) {
-            range.get().setFrom((range.get().getFrom() / bankSize + 1) * bankSize);
-        }
-        // No queda sitio en este rango, se descarta y se prueba con el siguiente
-        if (range.get().getFrom() + size - 1 > range.get().getTo()) {
-            App.config.spaceRanges().remove(range.get());
-            return getNewAddress(size, bankSize);
-        }
+        return null;
+    }
 
-        int newAddress = range.get().getFrom();
-        range.get().setFrom(range.get().getFrom() + size + 1);
-
-        return newAddress;
+    /**
+     * Devuelve al espacio libre el hueco que deja algo que se ha movido de sitio, para que lo pueda
+     * aprovechar lo siguiente que no quepa. Los huecos que quedan pegados a un rango que ya estaba se juntan
+     * con él, para que no se pierda nada por el camino.
+     * <p>
+     * Sólo lo llama quien sabe que ahí ya no queda nada: un hueco compartido con otra cosa, como los samples
+     * que se apuntan entre ellos, no se puede liberar.
+     */
+    public static void freeSpace(int from, int size) {
+        if (size <= 0) {
+            return;
+        }
+        int start = from;
+        int end = from + size - 1;
+        Iterator<Range> ranges = App.config.spaceRanges().iterator();
+        while (ranges.hasNext()) {
+            Range range = ranges.next();
+            if (range.getTo() + 1 < start || end + 1 < range.getFrom()) {
+                continue;
+            }
+            start = Math.min(start, range.getFrom());
+            end = Math.max(end, range.getTo());
+            ranges.remove();
+        }
+        App.config.spaceRanges().add(Range.of(start, end));
+        Log.pnl("Queda libre el hueco de {0} a {1}, {2} bytes.",
+                Integer.toHexString(start), Integer.toHexString(end), end - start + 1);
     }
 
     public static void writeThreeBytes(byte[] data, int offset, int value) {
