@@ -18,6 +18,9 @@ import java.util.Set;
  * @param texts    si no está vacío, las únicas direcciones de texto que se extraen
  * @param intro    fichero con la ROM de la intro que se pone delante del juego, si se quiere
  * @param introSpace zonas de la ROM que puede usar la intro para repartir sus trozos
+ * @param codeSpace  huecos de la ROM donde se pueden escribir trampolines de ocho bytes para desviar un
+ *                   {@code lea (d16,PC)} cuyo texto se ha ido a más de 32 KB. Tienen que caer cerca del
+ *                   propio lea, así que conviene dar varios repartidos por la zona de código.
  */
 public record Config(int minChars,
                      Set<Range> textRanges,
@@ -27,7 +30,8 @@ public record Config(int minChars,
                      Map<Integer, Integer> scenes,
                      Set<Integer> texts,
                      String intro,
-                     Set<Range> introSpace) {
+                     Set<Range> introSpace,
+                     Set<Range> codeSpace) {
 
     private static final int DEFAULT_MIN_CHARS = 5;
 
@@ -35,7 +39,8 @@ public record Config(int minChars,
     public static final int NONE = -1;
 
     public Config() {
-        this(DEFAULT_MIN_CHARS, Set.of(), Set.of(), Set.of(), Map.of(), Map.of(), Set.of(), null, Set.of());
+        this(DEFAULT_MIN_CHARS, Set.of(), Set.of(), Set.of(), Map.of(), Map.of(), Set.of(), null, Set.of(),
+                Set.of());
     }
 
     public static Config getInstance(String fileName) throws IOException {
@@ -56,7 +61,9 @@ public record Config(int minChars,
         Set<Integer> texts = parseAddresses(properties.getProperty("texts"));
         String intro = properties.getProperty("intro");
         Set<Range> introSpace = parseRanges(properties.getProperty("introSpace"));
-        return new Config(minChars, textRanges, bins, spaceRanges, palettes, scenes, texts, intro, introSpace);
+        Set<Range> codeSpace = parseRanges(properties.getProperty("codeSpace"));
+        return new Config(minChars, textRanges, bins, spaceRanges, palettes, scenes, texts, intro, introSpace,
+                codeSpace);
     }
 
     /**

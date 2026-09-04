@@ -59,8 +59,13 @@ public record Texticle(int address, int size, String text, Pointer pointer) {
         return Integer.parseInt(field.trim(), 16);
     }
 
+    /** El texto tal cual, sin cortar ni rellenar: ya se encarga quien lo escriba de hacerlo caber. */
+    public byte[] toRawAsciiBytes() {
+        return text.getBytes(StandardCharsets.ISO_8859_1);
+    }
+
     public byte[] toAsciiBytes() {
-        byte[] result = text.getBytes(StandardCharsets.ISO_8859_1);
+        byte[] result = toRawAsciiBytes();
         if (size != result.length) {
             Log.pnl("Alerta: El texto leído \"" + text + "\" tiene " + result.length
                     + " caracteres, pero el texto original tenía " + size

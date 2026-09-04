@@ -20,11 +20,40 @@ Cada texto ocupa una línea del fichero `.txt`, con el formato `direccion#tamañ
 El puntero lleva delante de qué tipo es, porque no se rellenan igual:
 
 - `abs:01663b` es un puntero absoluto de tres bytes. Si el texto no cabe se mueve al espacio libre de `spaceRanges` y se reescribe el puntero.
-- `lea:005a00` es un `lea (d16,PC),aN` del 68000, que es como el código llega a los textos que tiene cerca. Ahí no se guarda la dirección sino la distancia, y son 16 bits con signo, así que el texto sólo se puede mover a menos de 32 KB del propio `lea`. Si el hueco libre queda más lejos se avisa y el texto se corta, en vez de escribir una distancia que no cabe.
+- `lea:005a00` es un `lea (d16,PC),aN` del 68000, que es como el código llega a los textos que tiene cerca. Ahí no se guarda la dirección sino la distancia, y son 16 bits con signo, así que el texto sólo se puede mover a menos de 32 KB del propio `lea`. Si hace falta llevarlo más lejos se desvía el `lea` por un trampolín (ver `codeSpace` más abajo).
 
-Al buscar el puntero de un texto se mira primero si hay un `lea` que apunte justo a él, y sólo si no lo hay se recurre al puntero absoluto: un valor de tres bytes puede aparecer por casualidad en cualquier sitio, un `lea` no.
+Al buscar el puntero de un texto se mira primero si hay un `lea` que apunte justo a él, y sólo si no lo hay se recurre al puntero absoluto. Y no vale cualquier sitio donde aparezcan esos tres bytes: un puntero de tres bytes es la parte baja de una palabra larga `00xxxxxx`, así que tiene que empezar en dirección impar, llevar delante un cero y estar a menos de 32 KB de su texto, que es donde el juego pone sus tablas de punteros. Sin estas comprobaciones se cuelan coincidencias de los gráficos: en esta ROM, la mitad larga de los punteros absolutos que salían eran casualidades, y escribir en ellas estropeaba los gráficos y dejaba el texto sin apuntar, o sea en blanco.
 
-Hay textos sin puntero: muchos van seguidos dentro de un bloque y el código los recorre uno detrás de otro, así que sólo se apunta al primero. Esos se pueden alargar o acortar entre ellos mientras el bloque entero siga ocupando lo mismo.
+Los punteros del fichero de textos se repasan también al inyectar, así que un fichero hecho con una versión anterior sigue valiendo: los que no eran punteros se descartan y se avisa de cuántos había. Volver a extraer sólo sirve para quitarlos del fichero.
+
+#### Cadenas de textos
+
+Hay bloques donde el juego no apunta a cada texto, sino sólo al primero, y va sacando los demás recorriendo la ROM de terminador en terminador. Los créditos son así: son cuarenta líneas seguidas y en toda la ROM sólo hay tres `lea` que apunten a ellas, uno por cada rótulo. No hay ninguna tabla de punteros.
+
+Esos textos no se pueden mover de uno en uno, así que se tratan como una cadena:
+
+- Si cada línea cabe en su sitio, se escriben donde estaban y no se toca nada más.
+- Si alguna se pasa pero la cadena entera todavía cabe, se reparte el hueco entre todas: se escriben pegadas y lo que sobra se rellena de ceros. Da igual el reparto entre líneas mientras el total cuadre.
+- Si tampoco así cabe, se mueve la cadena entera al espacio libre y se retoca el puntero de la primera línea.
+
+La cadena se lee de la propia ROM, no del fichero de textos, así que da igual que el fichero venga filtrado con `texts`: las líneas que falten se copian tal cual estaban. Una línea en blanco del rótulo (dos terminadores seguidos) también cuenta como un texto más y se respeta.
+
+#### Trampolines
+
+Un `lea (d16,PC)` sólo alcanza 32 KB, y en los créditos no hay tanto espacio libre cerca. Para llevar un texto más lejos se cambia el `lea` por un `bsr.w` de cuatro bytes a un trampolín que carga la dirección entera y vuelve:
+
+```
+lea (xxxxxxxx).l,aN
+rts
+```
+
+Ocupan lo mismo y hacen lo mismo, y ninguna de las dos instrucciones toca los flags. Los ocho bytes del trampolín salen de la propiedad `codeSpace`, que son huecos de la ROM donde se puede escribir código; tienen que caer a menos de 32 KB del `lea`, así que conviene dar varios repartidos por la zona de código:
+
+```properties
+codeSpace=0x1c0,0x1ef#0xd09a,0xd0d3
+```
+
+En esta ROM `0x1C0` son los bytes reservados de la cabecera de Mega Drive y `0xD09A` es relleno entre dos rutinas. Si no hay hueco a tiro se avisa y el texto se corta, en vez de escribir un salto que no llega.
 
 Con la propiedad `texts` se limita la extracción a una lista de direcciones, que es cómodo cuando ya se han descartado a mano los falsos positivos:
 
@@ -159,6 +188,12 @@ Sólo necesitas ejecutar: `mvn clean package`. En la carpeta `dist` tendrás el 
 - Lanzar mejores alertas si hay inconsistencias y recuperación de errores
 
 ## Cambios recientes
+
+- Los créditos y los demás bloques de textos encadenados se reubican enteros, no línea a línea.
+- Los punteros del fichero de textos se repasan al inyectar, así que los ficheros ya empezados siguen valiendo sin volver a extraer.
+- Un `lea` puede desviarse por un trampolín, con lo que un texto suyo ya puede irse a cualquier parte de la ROM. Los huecos para el trampolín se indican con la propiedad `codeSpace`.
+- Los punteros absolutos se comprueban antes de darlos por buenos: hasta ahora se colaban coincidencias de los gráficos, y escribir en ellas estropeaba la ROM y dejaba el texto sin apuntar.
+- Un texto que no cabe y no se puede mover ya no se escribe más allá de su hueco, pisando al siguiente.
 
 - Los gráficos se extraen y se inyectan como PNG en vez de como volcados de tiles. Ya no se generan los `.bin`.
 - Los fondos que tienen mapa de tiles salen montados como pantalla de 320x224, y se pueden editar así.
