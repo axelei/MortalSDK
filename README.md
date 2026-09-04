@@ -136,6 +136,16 @@ Se admite cualquier WAV PCM de 8 o 16 bits, mono o estéreo, y a cualquier frecu
 
 Los bloques de `bins` nunca se reubican ni cambian de tamaño, porque no tienen por qué ser direccionables por puntero.
 
+### Parche IPS
+
+Al terminar la inyección se escribe también un `.ips` junto a la ROM, que es lo que se reparte: la ROM entera es casi toda del juego original, y el parche sólo lleva los bytes que ha puesto este programa. Se genera solo, sin configurar nada.
+
+```
+Parche escrito en: Mortal Kombat Arcade Edition v2-0.bin.ips (216.296 bytes, 199.712 cambiados de 4.194.304)
+```
+
+Las tiradas largas de un mismo byte van en RLE, los cambios separados por menos de cinco bytes iguales se juntan en un registro, y las tiradas de más de 64 KB se reparten entre varios, que es lo que cabe en el tamaño de un registro. Si la inyección no ha cambiado nada se avisa: un parche sin registros no sirve de nada y además hay programas que lo dan por incompleto.
+
 ### Intro
 
 Se puede poner una intro delante del juego: al encender se ve la intro, y con START (o A), o pasado un rato, entra al juego. Se activa con dos propiedades:
@@ -189,6 +199,7 @@ Sólo necesitas ejecutar: `mvn clean package`. En la carpeta `dist` tendrás el 
 
 ## Cambios recientes
 
+- Al inyectar se escribe también un parche `.ips` con lo que ha cambiado, que es lo que se reparte.
 - Los créditos y los demás bloques de textos encadenados se reubican enteros, no línea a línea.
 - Los punteros del fichero de textos se repasan al inyectar, así que los ficheros ya empezados siguen valiendo sin volver a extraer.
 - Un `lea` puede desviarse por un trampolín, con lo que un texto suyo ya puede irse a cualquier parte de la ROM. Los huecos para el trampolín se indican con la propiedad `codeSpace`.

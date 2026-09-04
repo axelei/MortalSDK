@@ -97,6 +97,9 @@ public class App {
         File outputFile = new File(file + ".patched.bin");
         Files.write(outputFile.toPath(), fileData);
         Log.pnl("Salida escrita en: " + outputFile.getAbsolutePath());
+        // lo que se reparte no es la ROM, que es casi toda del juego, sino el parche con lo que hemos puesto
+        Log.pnl("Escribiendo el parche...");
+        IpsService.write(originalData, fileData, file);
     }
 
     public static void displayHelp() {
