@@ -2,106 +2,87 @@ package net.krusher.mortalsdk;
 
 import org.apache.commons.lang3.StringUtils;
 
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileOutputStream;
-import java.io.FileWriter;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 public class BlockService {
 
     private BlockService() {}
 
-    public static void extractCompressedBlocks(String file) throws IOException, InterruptedException {
-        String output = BlockService.execute(App.config.proPackExe(), "e", file);
-        File extractedFolder = new File("extracted");
-        File[] extractedFiles = extractedFolder.listFiles();
-        if (extractedFiles == null) {
-            Log.pnl("No se encontraron archivos extraídos.");
-            return;
+    /**
+     * Busca los bloques RNC de la ROM y los deja descomprimidos en la carpeta "extracted".
+     */
+    public static void extractCompressedBlocks(byte[] fileData) throws IOException {
+        List<RncService.Block> blocks = RncService.search(fileData);
+        for (RncService.Block block : blocks) {
+            Path target = Paths.get("extracted", "data_" + toHexStringPadded(block.address()) + ".bin");
+            Files.write(target, block.data());
         }
-        List<String> sizes = new ArrayList<>();
-        Map<Integer, Integer> originalSizes = new HashMap<>();
-        for (String line : output.split("\n")) {
-            if (line.contains("RNC archive found")) {
-                String regex = "(0x[0-9a-f]+) \\(([0-9]+)/([0-9]+)";
-                Pattern pattern = Pattern.compile(regex);
-                Matcher matcher = pattern.matcher(line);
-                matcher.find();
-                int address = Integer.parseInt(matcher.group(1).trim().substring(2), 16);
-                int originalSize = Integer.parseInt(matcher.group(2).trim());
-                originalSizes.put(address, originalSize);
-            }
-        }
-        for (File extractedFile : extractedFiles) {
-            if (!extractedFile.getName().startsWith("data_")) {
-                continue;
-            }
-            sizes.add(extractedFile.getName() + "#" + extractedFile.length() + "#" + originalSizes.get(Integer.parseInt(extractedFile.getName().substring(5, 11), 16)));
-        }
-        printLogFile(sizes);
+        Log.pnl("Bloques comprimidos extraídos: {0}", blocks.size());
     }
 
-    public static void injectCompressedBlocks(File[] extractedFiles, byte[] fileData) throws IOException, InterruptedException {
-        Map<String, Integer> sizes = new HashMap<>();
-        List<String> logLines = Files.readAllLines(Paths.get("extracted/log.txt"));
-        for (String line : logLines) {
-            String[] parts = line.split("#");
-            String fileName = parts[0];
-            int size = Integer.parseInt(parts[2]);
-            sizes.put(fileName, size);
+    /**
+     * Vuelve a comprimir los bloques de la carpeta "extracted" y los mete en la ROM. El hueco de cada uno es
+     * el que ocupaba en la ROM original. Si el bloque recomprimido no cabe, se busca un puntero de tres bytes
+     * a su dirección: sólo si existe se mueve al espacio libre y se corrige el puntero.
+     */
+    public static void injectCompressedBlocks(File[] extractedFiles, byte[] fileData, byte[] originalData) throws IOException {
+        Map<Integer, Integer> room = new HashMap<>();
+        for (RncService.Block block : RncService.search(originalData)) {
+            room.put(block.address(), block.packedSize());
         }
         for (File extractedFile : extractedFiles) {
-            if (!extractedFile.getName().startsWith("data_")) {
+            String name = extractedFile.getName();
+            if (!name.startsWith("data_")) {
                 continue;
             }
-            execute(App.config.proPackExe(), "p", "extracted\\" + extractedFile.getName(), "temp.bin");
-            Log.p(" " + extractedFile.getName());
-            String addressHex = extractedFile.getName().substring(5, 11);
-            int addressDecimal = Integer.parseInt(addressHex, 16);
-            byte[] compressedData = Files.readAllBytes(Paths.get("temp.bin"));
-            int originalSize = sizes.get(extractedFile.getName());
+            int address = parseAddress(name);
+            Integer originalSize = room.get(address);
+            if (Objects.isNull(originalSize)) {
+                Log.pnl();
+                Log.p("El bloque {0} no estaba comprimido en la ROM original, no se inyectará.", name);
+                continue;
+            }
+            byte[] blockData = Files.readAllBytes(extractedFile.toPath());
+            byte[] compressedData;
+            try {
+                compressedData = RncService.pack(blockData, RncService.METHOD_1);
+            } catch (RncException e) {
+                Log.pnl();
+                Log.p("No se ha podido comprimir {0}: {1}", name, e.getMessage());
+                continue;
+            }
+            Log.p(" " + name);
+
             if (originalSize >= compressedData.length) {
-                System.arraycopy(compressedData, 0, fileData, addressDecimal, compressedData.length);
-                if (originalSize > compressedData.length) {
-                    byte[] padding = new byte[originalSize - compressedData.length];
-                    Arrays.fill(padding, (byte) 0x00);
-                    System.arraycopy(padding, 0, fileData, addressDecimal + compressedData.length, padding.length);
-                }
+                System.arraycopy(compressedData, 0, fileData, address, compressedData.length);
+                Arrays.fill(fileData, address + compressedData.length, address + originalSize, (byte) 0x00);
                 continue;
             }
-            Log.p(" Bloque comprimido {0} mayor que su hueco. ", extractedFile.getName());
-            int address = Integer.parseInt(extractedFile.getName().substring(extractedFile.getName().lastIndexOf('_') + 1, extractedFile.getName().lastIndexOf('.')), 16);
+
+            Log.p(" Bloque comprimido {0} mayor que su hueco. ", name);
             Integer pointer = TexticleService.findPointerAddress(address, fileData);
             Integer newAddress = TexticleService.getNewAddress(compressedData.length);
-            if (Objects.nonNull(pointer) && Objects.nonNull(newAddress)) {
+            if (Objects.nonNull(pointer) && Objects.nonNull(newAddress)
+                    && newAddress + compressedData.length <= fileData.length) {
                 Log.pnl("Se inyectará en la dirección {0}.", toHexStringPadded(newAddress));
                 System.arraycopy(compressedData, 0, fileData, newAddress, compressedData.length);
                 TexticleService.writeThreeBytes(fileData, pointer, newAddress);
-                byte[] padding = new byte[originalSize];
-                Arrays.fill(padding, (byte) 0x00);
-                System.arraycopy(padding, 0, fileData, addressDecimal, originalSize);
+                Arrays.fill(fileData, address, address + originalSize, (byte) 0x00);
             } else {
                 Log.pnl("No se inyectará.");
             }
-        }
-        File tempFile = new File("temp.bin");
-        if (tempFile.exists()) {
-            tempFile.delete();
         }
         Log.pnl();
     }
@@ -176,36 +157,6 @@ public class BlockService {
 
     public static String toHexStringPadded(int address) {
         return StringUtils.leftPad(Integer.toHexString(address), 6, '0');
-    }
-
-    public static String execute(String... parameters) throws IOException, InterruptedException {
-        StringBuilder output = new StringBuilder();
-        ProcessBuilder processBuilder = new ProcessBuilder(parameters);
-        processBuilder
-                .redirectInput(ProcessBuilder.Redirect.INHERIT)
-                .redirectOutput(ProcessBuilder.Redirect.PIPE)
-                .redirectError(ProcessBuilder.Redirect.INHERIT);
-        Process process = processBuilder.start();
-        String line;
-        BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
-        while ((line = reader.readLine()) != null) {
-            output.append(line).append(System.lineSeparator());
-        }
-        int exitCode = process.waitFor();
-        if (exitCode != 0) {
-            Log.pnl("Error al ejecutar el comando: " + exitCode);
-            System.exit(exitCode);
-        }
-        return output.toString();
-    }
-
-    public static void printLogFile(List<String> list) throws IOException {
-        BufferedWriter writer = new BufferedWriter(new FileWriter("extracted/log.txt"));
-        for (String line : list) {
-            writer.write(line);
-            writer.newLine();
-        }
-        writer.close();
     }
 
 }

@@ -1,8 +1,6 @@
 package net.krusher.mortalsdk;
 
 import com.google.common.collect.BiMap;
-import org.apache.commons.lang3.StringUtils;
-
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -17,7 +15,7 @@ public class App {
     static Config config;
     static BiMap<String, String> tbl;
 
-    public static void main( String[] args ) throws IOException, InterruptedException {
+    public static void main( String[] args ) throws IOException {
 
         Log.pnl("MortalSDK by Krusher - Programa bajo licencia GPL 3");
 
@@ -50,14 +48,12 @@ public class App {
         System.exit(0);
     }
 
-    public static void extract(String file) throws IOException, InterruptedException {
+    public static void extract(String file) throws IOException {
         Log.pnl("Modo: Extraer");
         Log.pnl("Leyendo archivo: " + file);
         byte[] fileData = Files.readAllBytes(Paths.get(file));
-        if (StringUtils.isNotBlank(config.proPackExe())) {
-            Log.pnl("Extrayendo bloques...");
-            BlockService.extractCompressedBlocks(file);
-        }
+        Log.pnl("Extrayendo bloques comprimidos...");
+        BlockService.extractCompressedBlocks(fileData);
         Log.pnl("Extrayendo samples PCM...");
         SampleService.extract(fileData);
         Log.pnl("Extrayendo datos sin comprimir...");
@@ -69,7 +65,7 @@ public class App {
         Log.pnl("Salida escrita en: " + file + ".txt");
     }
 
-    public static void inject(String file) throws IOException, InterruptedException {
+    public static void inject(String file) throws IOException {
         Log.pnl("Modo: Inyectar");
         Log.pnl("Leyendo archivo: " + file);
         byte[] fileData = Files.readAllBytes(Paths.get(file));
@@ -80,10 +76,8 @@ public class App {
         if (extractedFiles == null || extractedFiles.length == 0) {
             Log.pnl("No se encontraron archivos extraídos en la carpeta 'extracted'");
         } else {
-            if (StringUtils.isNotBlank(config.proPackExe())) {
-                Log.p("Inyectando bloques comprimidos:");
-                BlockService.injectCompressedBlocks(extractedFiles, fileData);
-            }
+            Log.p("Inyectando bloques comprimidos:");
+            BlockService.injectCompressedBlocks(extractedFiles, fileData, originalData);
             Log.p("Inyectando samples PCM:");
             SampleService.inject(extractedFiles, fileData, originalData);
             Log.pnl();

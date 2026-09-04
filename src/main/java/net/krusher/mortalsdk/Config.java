@@ -13,13 +13,12 @@ import java.util.Set;
 public record Config(int minChars,
                      Set<Range> textRanges,
                      Set<Range> bins,
-                     Set<Range> spaceRanges,
-                     String proPackExe) {
+                     Set<Range> spaceRanges) {
 
     private static final int DEFAULT_MIN_CHARS = 5;
 
     public Config() {
-        this(DEFAULT_MIN_CHARS, Set.of(), Set.of(), Set.of(), null);
+        this(DEFAULT_MIN_CHARS, Set.of(), Set.of(), Set.of());
     }
 
     public static Config getInstance(String fileName) throws IOException {
@@ -35,9 +34,7 @@ public record Config(int minChars,
         Set<Range> bins = parseRanges(binsStr);
         String spaceRangesStr = properties.getProperty("spaceRanges");
         Set<Range> spaceRanges = parseRanges(spaceRangesStr);
-        String proPackExe = properties.getProperty("proPackExe", null);
-
-        return new Config(minChars, textRanges, bins, spaceRanges, proPackExe);
+        return new Config(minChars, textRanges, bins, spaceRanges);
     }
 
     private static Set<Range> parseRanges(String string) {

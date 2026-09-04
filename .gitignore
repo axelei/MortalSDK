@@ -33,7 +33,6 @@ build/
 .DS_Store
 
 ### Misc ###
-rnc_propack_x64.exe
 *.bin
 *.txt
 extracted

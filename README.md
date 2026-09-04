@@ -36,9 +36,17 @@ Los bloques de `bins` nunca se reubican ni cambian de tamaño, porque no tienen 
 
 ## Requisitos
 
-Require `rnc_propack_x64.exe` u otra compilación para extraer/inyectar bloques comprimidos RNC. Se puede obtener de: https://github.com/lab313ru/rnc_propack_source/releases
+Ninguno aparte de Java: la compresión RNC ProPack va incluida, así que ya no hace falta `rnc_propack_x64.exe` ni ningún otro programa externo.
 
 Con pequeños ajustes en la configuración se puede usar con otras ROMs y otros sistemas operativos. Añade un 'issue' si tienes alguna propuesta de cambio.
+
+### Sobre la compresión RNC
+
+Están los dos métodos, el 1 (Huffman + LZ77) y el 2. Los bloques se buscan por toda la ROM, se descomprimen y, al inyectar, se vuelven a comprimir.
+
+El método 1 da exactamente los mismos bytes que la herramienta original: se ha comprobado con los 141 bloques de la ROM de Mortal Kombat, en los dos sentidos. Con el método 2 el resultado es correcto y la herramienta original lo descomprime bien, pero en algunos casos sale entre uno y tres bytes más largo que el suyo.
+
+Cuando unos datos no se pueden comprimir, la herramienta original dice que ha ido bien pero deja un fichero que ni ella misma es capaz de descomprimir. Aquí eso se detecta y se avisa en vez de escribir un bloque roto.
 
 ## Compilación
 
@@ -50,13 +58,15 @@ Sólo necesitas ejecutar: `mvn clean package`. En la carpeta `dist` tendrás el 
 
 - Extraer paletas
 - Mejorar la extracción de textos
-- Programar mi propio extractor y compresor de RNC para no necesitar rnc_propack_x64.exe
 - Internacionalizar los mensajes
 - Crear tests unitarios
 - Lanzar mejores alertas si hay inconsistencias y recuperación de errores
 
 ## Cambios recientes
 
+- La compresión RNC ProPack ya va dentro del programa: se acabó depender de `rnc_propack_x64.exe`.
+- Ya no se genera `extracted/log.txt`: los tamaños originales se sacan de la propia ROM al inyectar.
+- Se ha quitado la propiedad `proPackExe`.
 - Los samples PCM se extraen a WAV y se reinyectan desde WAV, dentro del mismo flujo `x` / `i`.
 - La tabla de samples ya no se configura: se busca dentro de la ROM.
 - Cada WAV lleva la frecuencia real a la que el juego reproduce ese sample, deducida del reproductor Z80.
@@ -65,6 +75,9 @@ Sólo necesitas ejecutar: `mvn clean package`. En la carpeta `dist` tendrás el 
 
 ## Autoría y reconocimientos
 
-Gracias a [Rael G. C.](https://github.com/raelgc) por la información que me faltaba sobre el formato de gráficos y esquema de compresión. 
+Gracias a [Rael G. C.](https://github.com/raelgc) por la información que me faltaba sobre el formato de gráficos y esquema de compresión.
+
+La compresión RNC ProPack está portada del código que publicó [Lab 313 (Dr. MefistO)](https://github.com/lab313ru/rnc_propack_source), a su vez sacado de la herramienta original de Rob Northen Computing.
+
 
 By Krusher, licenciado bajo GPL 3. Por favor, consulta el fichero LICENSE.
