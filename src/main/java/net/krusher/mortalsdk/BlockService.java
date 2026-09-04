@@ -10,6 +10,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.HashSet;
 import java.util.Map;
@@ -25,12 +26,41 @@ public class BlockService {
      */
     public static void extractCompressedBlocks(byte[] fileData) throws IOException {
         List<RncService.Block> blocks = RncService.search(fileData);
+        Map<Integer, Integer> palettes = PaletteService.detect(fileData, addressesOf(blocks));
+        Map<Integer, byte[]> data = new HashMap<>();
         for (RncService.Block block : blocks) {
-            int[] palette = PaletteService.forBlock(block.address(), fileData);
-            Bitmap image = TileService.toBitmap(block.data(), palette);
-            Png.write(image, new File("extracted", "data_" + toHexStringPadded(block.address()) + ".png"));
+            data.put(block.address(), block.data());
         }
-        Log.pnl("Bloques comprimidos extraídos: {0}", blocks.size());
+
+        Set<Integer> inScene = new HashSet<>();
+        List<SceneService.Scene> scenes = SceneService.find(blocks);
+        for (SceneService.Scene scene : scenes) {
+            int[] palette = PaletteService.forBlock(scene.graphicsAddress(), fileData, palettes);
+            Bitmap image = SceneService.render(data.get(scene.mapAddress()),
+                    data.get(scene.graphicsAddress()), palette);
+            Png.write(image, SceneService.fileOf(scene));
+            inScene.add(scene.mapAddress());
+            inScene.add(scene.graphicsAddress());
+        }
+
+        for (RncService.Block block : blocks) {
+            if (inScene.contains(block.address())) {
+                continue;
+            }
+            int[] palette = PaletteService.forBlock(block.address(), fileData, palettes);
+            Png.write(TileService.toBitmap(block.data(), palette),
+                    new File("extracted", "data_" + toHexStringPadded(block.address()) + ".png"));
+        }
+        Log.pnl("Bloques comprimidos extraídos: {0} ({1} pantallas completas, {2} con su paleta de la ROM)",
+                blocks.size(), scenes.size(), palettes.size());
+    }
+
+    private static Set<Integer> addressesOf(List<RncService.Block> blocks) {
+        Set<Integer> addresses = new HashSet<>();
+        for (RncService.Block block : blocks) {
+            addresses.add(block.address());
+        }
+        return addresses;
     }
 
     /**
@@ -39,63 +69,104 @@ public class BlockService {
      * a su dirección: sólo si existe se mueve al espacio libre y se corrige el puntero.
      */
     public static void injectCompressedBlocks(File[] extractedFiles, byte[] fileData, byte[] originalData) throws IOException {
+        List<RncService.Block> blocks = RncService.search(originalData);
         Map<Integer, Integer> room = new HashMap<>();
         Map<Integer, Integer> sizes = new HashMap<>();
-        for (RncService.Block block : RncService.search(originalData)) {
+        Map<Integer, byte[]> original = new HashMap<>();
+        for (RncService.Block block : blocks) {
             room.put(block.address(), block.packedSize());
             sizes.put(block.address(), block.data().length);
+            original.put(block.address(), block.data());
         }
+        Map<Integer, Integer> palettes = PaletteService.detect(originalData, addressesOf(blocks));
+
+        // qué hay que meter en cada dirección, venga de una pantalla o de una hoja de tiles suelta
+        Map<Integer, byte[]> pending = new LinkedHashMap<>();
+        Map<Integer, String> origin = new LinkedHashMap<>();
+
+        for (SceneService.Scene scene : SceneService.find(blocks)) {
+            File file = SceneService.fileOf(scene);
+            if (!file.exists()) {
+                continue;
+            }
+            int[] palette = PaletteService.forBlock(scene.graphicsAddress(), originalData, palettes);
+            try {
+                SceneService.Rebuilt rebuilt = SceneService.rebuild(Png.read(file),
+                        original.get(scene.mapAddress()), original.get(scene.graphicsAddress()), palette);
+                pending.put(scene.graphicsAddress(), rebuilt.graphics());
+                pending.put(scene.mapAddress(), rebuilt.map());
+                origin.put(scene.graphicsAddress(), file.getName());
+                origin.put(scene.mapAddress(), file.getName());
+            } catch (IOException e) {
+                Log.pnl();
+                Log.p("No se ha podido rehacer la pantalla {0}: {1}", file.getName(), e.getMessage());
+            }
+        }
+
         for (File extractedFile : extractedFiles) {
             String name = extractedFile.getName();
             if (!name.startsWith("data_") || !name.endsWith(".png")) {
                 continue;
             }
             int address = parseAddress(name);
-            Integer originalSize = room.get(address);
+            if (pending.containsKey(address)) {
+                continue;
+            }
+            Integer originalSize = sizes.get(address);
             if (Objects.isNull(originalSize)) {
                 Log.pnl();
                 Log.p("El bloque {0} no estaba comprimido en la ROM original, no se inyectará.", name);
                 continue;
             }
-            int[] palette = PaletteService.forBlock(address, originalData);
+            int[] palette = PaletteService.forBlock(address, originalData, palettes);
             Bitmap image = Png.read(extractedFile);
             if (image.getWidth() != TileService.COLUMNS * TileService.TILE_SIZE) {
                 Log.pnl();
                 Log.p("Alerta: {0} mide {1} de ancho y deberían ser {2}; el orden de los tiles depende del ancho.",
                         name, image.getWidth(), TileService.COLUMNS * TileService.TILE_SIZE);
             }
-            byte[] blockData = TileService.toTiles(image, palette, sizes.get(address));
-            byte[] compressedData;
-            try {
-                compressedData = RncService.pack(blockData, RncService.METHOD_1);
-            } catch (RncException e) {
-                Log.pnl();
-                Log.p("No se ha podido comprimir {0}: {1}", name, e.getMessage());
-                continue;
-            }
-            Log.p(" " + name);
+            pending.put(address, TileService.toTiles(image, palette, originalSize));
+            origin.put(address, name);
+        }
 
-            if (originalSize >= compressedData.length) {
-                System.arraycopy(compressedData, 0, fileData, address, compressedData.length);
-                Arrays.fill(fileData, address + compressedData.length, address + originalSize, (byte) 0x00);
-                continue;
-            }
-
-            Log.p(" Bloque comprimido {0} mayor que su hueco. ", name);
-            // se busca en la ROM original, para que lo ya inyectado no altere la búsqueda
-            Integer pointer = TexticleService.findPointerAddress(address, originalData);
-            Integer newAddress = TexticleService.getNewAddress(compressedData.length);
-            if (Objects.nonNull(pointer) && Objects.nonNull(newAddress)
-                    && newAddress + compressedData.length <= fileData.length) {
-                Log.pnl("Se inyectará en la dirección {0}.", toHexStringPadded(newAddress));
-                System.arraycopy(compressedData, 0, fileData, newAddress, compressedData.length);
-                TexticleService.writeThreeBytes(fileData, pointer, newAddress);
-                Arrays.fill(fileData, address, address + originalSize, (byte) 0x00);
-            } else {
-                Log.pnl("No se inyectará.");
-            }
+        for (Map.Entry<Integer, byte[]> entry : pending.entrySet()) {
+            injectCompressedBlock(entry.getKey(), entry.getValue(), origin.get(entry.getKey()),
+                    room.get(entry.getKey()), fileData, originalData);
         }
         Log.pnl();
+    }
+
+    private static void injectCompressedBlock(int address, byte[] blockData, String name, Integer originalSize,
+                                              byte[] fileData, byte[] originalData) throws IOException {
+        byte[] compressedData;
+        try {
+            compressedData = RncService.pack(blockData, RncService.METHOD_1);
+        } catch (RncException e) {
+            Log.pnl();
+            Log.p("No se ha podido comprimir {0}: {1}", name, e.getMessage());
+            return;
+        }
+        Log.p(" " + toHexStringPadded(address));
+
+        if (originalSize >= compressedData.length) {
+            System.arraycopy(compressedData, 0, fileData, address, compressedData.length);
+            Arrays.fill(fileData, address + compressedData.length, address + originalSize, (byte) 0x00);
+            return;
+        }
+
+        Log.p(" Bloque comprimido {0} mayor que su hueco. ", name);
+        // se busca en la ROM original, para que lo ya inyectado no altere la búsqueda
+        Integer pointer = TexticleService.findPointerAddress(address, originalData);
+        Integer newAddress = TexticleService.getNewAddress(compressedData.length);
+        if (Objects.nonNull(pointer) && Objects.nonNull(newAddress)
+                && newAddress + compressedData.length <= fileData.length) {
+            Log.pnl("Se inyectará en la dirección {0}.", toHexStringPadded(newAddress));
+            System.arraycopy(compressedData, 0, fileData, newAddress, compressedData.length);
+            TexticleService.writeThreeBytes(fileData, pointer, newAddress);
+            Arrays.fill(fileData, address, address + originalSize, (byte) 0x00);
+        } else {
+            Log.pnl("No se inyectará.");
+        }
     }
 
     /**

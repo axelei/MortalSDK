@@ -23,17 +23,31 @@ No hace falta que un bloque sea un número redondo de tiles: la última fila se 
 
 El ancho del PNG marca cuántos tiles hay por fila, así que conviene no cambiarlo. Si se cambia, se avisa por consola.
 
+#### Pantallas completas
+
+Los fondos no son una hoja de tiles suelta: el VDP los dibuja con un mapa de 40x28 casillas, una por cada tile de la pantalla visible, donde cada casilla es una palabra `P CC V H NNNNNNNNNNN` con prioridad, línea de paleta, los dos volteos y el índice de tile. En la ROM hay 18 bloques que son justo un mapa de esos.
+
+Cuando un mapa y su bloque de gráficos se reconocen como pareja, en vez de las dos hojas sueltas sale un único `scene_<mapa>_<graficos>.png` de 320x224 con la pantalla montada, volteos incluidos.
+
+Se pueden editar. Al inyectar, si la imagen dibuja lo mismo que había, los dos bloques se dejan intactos y la ROM sale idéntica byte a byte. En cuanto cambia algo, la imagen se parte en casillas de 8x8, se juntan las repetidas mirando también los cuatro volteos, y se rehacen el bloque de gráficos y el mapa. De cada casilla se conservan la prioridad y la línea de paleta, que no se pueden sacar de los píxeles.
+
+Como al rehacerlo se juntan los tiles repetidos, lo normal es que quepa; si aun así no cabe, se avisa y se deja el bloque como estaba. El tamaño de la imagen no se puede cambiar.
+
+La pareja se da por buena sólo cuando el bloque de gráficos tiene exactamente los tiles que el mapa usa y no hay otro candidato, que es señal de que se hizo para ese mapa. Con eso salen 5 de los 18 mapas; los demás usan bloques con más tiles de los que gastan y habría que rastrear en el código qué carga cada uno.
+
 #### Paletas
 
-Una línea de paleta de Mega Drive son 16 palabras big-endian con el formato `0000 BBB0 GGG0 RRR0`. Qué paleta le toca a cada bloque no se puede deducir de la ROM sin los mapas de tiles, así que por defecto se usa una rampa de grises, que deja los 16 índices bien distinguibles.
+Una línea de paleta de Mega Drive son 16 palabras big-endian con el formato `0000 BBB0 GGG0 RRR0`.
 
-Para ver un bloque con sus colores de verdad se indica a mano en la configuración, con direcciones en hexadecimal:
+Muchas se encuentran solas: el juego guarda tablas donde el puntero a la paleta va justo delante del puntero al bloque que la usa, así que se buscan esos pares comprobando que al otro lado hay de verdad formato CRAM. En esta ROM salen 31 bloques con su paleta.
+
+Lo que no aparezca así se puede indicar a mano, con direcciones en hexadecimal:
 
 ```properties
 palettes=1959bc,19597a
 ```
 
-La configuración incluida trae ese caso, que es el único confirmado: la paleta de `0x19597A` da los colores de escenario del bloque `0x1959BC`.
+Y si no hay ninguna, se dibuja con una rampa de grises, que deja los 16 índices bien distinguibles.
 
 Los samples PCM se extraen a WAV. No hay que configurarlos: se busca en la ROM la tabla que los describe y se vuelca cada entrada a `sample_<id>_<direccion>.wav`, con la frecuencia a la que el juego reproduce ese sample.
 
@@ -88,7 +102,8 @@ Sólo necesitas ejecutar: `mvn clean package`. En la carpeta `dist` tendrás el 
 ## Cambios recientes
 
 - Los gráficos se extraen y se inyectan como PNG en vez de como volcados de tiles. Ya no se generan los `.bin`.
-- Se pueden asignar paletas de la ROM a los bloques para verlos con sus colores.
+- Los fondos que tienen mapa de tiles salen montados como pantalla de 320x224, y se pueden editar así.
+- Las paletas de los gráficos se buscan solas en la ROM; también se pueden indicar a mano.
 - Los WAV se leen y se escriben sin `javax.sound`, así que la compilación nativa ya no genera `jsound.dll` y el ejecutable adelgaza unos 2 MB.
 - El método 2 de RNC ya da los mismos bytes que la herramienta original (antes salía alguno más largo).
 - `dist` ya no se queda con el ejecutable de la compilación anterior.

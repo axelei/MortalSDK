@@ -66,8 +66,8 @@ public final class TileService {
                     if (at >= length) {
                         continue;
                     }
-                    int left = indexOf(image, palette, tileX + column, tileY + row);
-                    int right = indexOf(image, palette, tileX + column + 1, tileY + row);
+                    int left = indexAt(image, palette, tileX + column, tileY + row);
+                    int right = indexAt(image, palette, tileX + column + 1, tileY + row);
                     data[at] = (byte) ((left << 4) | right);
                 }
             }
@@ -79,7 +79,7 @@ public final class TileService {
      * El índice de paleta de un píxel. Si el PNG es indexado se coge tal cual, que es lo exacto; si el editor
      * lo ha convertido a color, se busca el color más parecido de la paleta.
      */
-    private static int indexOf(Bitmap image, int[] palette, int x, int y) {
+    static int indexAt(Bitmap image, int[] palette, int x, int y) {
         if (x >= image.getWidth() || y >= image.getHeight()) {
             return 0;
         }
