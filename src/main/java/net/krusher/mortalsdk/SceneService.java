@@ -39,9 +39,12 @@ public final class SceneService {
     private SceneService() {}
 
     /**
-     * Una pantalla: el bloque del mapa y el de los gráficos que usa.
+     * Una pantalla: el mapa y el bloque de gráficos que usa.
+     *
+     * @param compressedMap si el mapa es un bloque RNC. Alguno está sin comprimir, suelto en la ROM, y
+     *                      entonces se lee y se escribe tal cual, sin pasar por el compresor.
      */
-    public record Scene(int mapAddress, int graphicsAddress) {
+    public record Scene(int mapAddress, int graphicsAddress, boolean compressedMap) {
         public String fileName() {
             return String.format("%s%06x_%06x%s", PREFIX, mapAddress, graphicsAddress, EXTENSION);
         }
@@ -54,7 +57,7 @@ public final class SceneService {
      * dejan lugar a dudas: un mapa es un bloque de exactamente 40x28 casillas, y sus gráficos son el bloque
      * que tiene justo los tiles que el mapa usa, sin que haya otro candidato con esa misma cuenta.
      */
-    public static List<Scene> find(List<RncService.Block> blocks) {
+    public static List<Scene> find(List<RncService.Block> blocks, byte[] fileData) {
         Map<Integer, Integer> lengths = new HashMap<>();
         for (RncService.Block block : blocks) {
             lengths.put(block.address(), block.data().length);
@@ -67,12 +70,15 @@ public final class SceneService {
                 continue;
             }
             Integer mapLength = lengths.get(pair.getKey());
-            if (mapLength == null || mapLength != MAP_BYTES || !lengths.containsKey(pair.getValue())) {
+            boolean compressed = mapLength != null && mapLength == MAP_BYTES;
+            // hay mapas que no están comprimidos, sino sueltos en la ROM
+            boolean raw = mapLength == null && pair.getKey() + MAP_BYTES <= fileData.length;
+            if (!lengths.containsKey(pair.getValue()) || (!compressed && !raw)) {
                 Log.pnl("La pantalla {0} de la configuración no cuadra con la ROM, se ignora.",
                         Integer.toHexString(pair.getKey()));
                 continue;
             }
-            scenes.add(new Scene(pair.getKey(), pair.getValue()));
+            scenes.add(new Scene(pair.getKey(), pair.getValue(), compressed));
             takenMaps.add(pair.getKey());
         }
 
@@ -93,7 +99,7 @@ public final class SceneService {
             }
             List<Integer> candidates = byTileCount.get(needed + 1);
             if (candidates != null && candidates.size() == 1) {
-                scenes.add(new Scene(block.address(), candidates.getFirst()));
+                scenes.add(new Scene(block.address(), candidates.getFirst(), true));
             }
         }
         return scenes;
@@ -313,6 +319,14 @@ public final class SceneService {
     private static void writeWord(byte[] data, int at, int value) {
         data[at] = (byte) (value >> 8);
         data[at + 1] = (byte) value;
+    }
+
+    /** Los bytes del mapa: del bloque descomprimido, o de la propia ROM si no está comprimido. */
+    public static byte[] mapOf(Scene scene, Map<Integer, byte[]> blocks, byte[] fileData) {
+        if (scene.compressedMap()) {
+            return blocks.get(scene.mapAddress());
+        }
+        return java.util.Arrays.copyOfRange(fileData, scene.mapAddress(), scene.mapAddress() + MAP_BYTES);
     }
 
     public static boolean isSceneFile(String name) {

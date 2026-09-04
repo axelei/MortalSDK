@@ -45,6 +45,8 @@ Lo que no esté ahí se intenta emparejar solo: un mapa va con el bloque que tie
 scenes=1ca6e0,-
 ```
 
+No todos los mapas están comprimidos: alguno va suelto en la ROM, y entonces se lee y se escribe tal cual, sin pasar por el compresor. Se reconoce solo, por no ser ninguno de los bloques RNC.
+
 Un mismo bloque de gráficos puede dar servicio a varias pantallas. En ese caso se rehacen todas juntas al inyectar, y los tiles que ya había no se renumeran, para no estropear las demás; sólo se añaden al final los que hagan falta.
 
 Ojo: si al inyectar un bloque se reubica por no caber, cambia de dirección, y entonces las direcciones de `scenes` se quedan viejas para esa ROM parcheada. Para volver a extraer de ella hay que actualizarlas.
@@ -119,7 +121,7 @@ Sólo necesitas ejecutar: `mvn clean package`. En la carpeta `dist` tendrás el 
 
 - Los gráficos se extraen y se inyectan como PNG en vez de como volcados de tiles. Ya no se generan los `.bin`.
 - Los fondos que tienen mapa de tiles salen montados como pantalla de 320x224, y se pueden editar así.
-- Las parejas de mapa y gráficos se pueden indicar con la propiedad `scenes`.
+- Las parejas de mapa y gráficos se pueden indicar con la propiedad `scenes`, y el mapa puede ir sin comprimir.
 - Las paletas de los gráficos se buscan solas en la ROM; también se pueden indicar a mano.
 - La configuración trae las paletas de nueve de las once pantallas, sacadas del código que las carga.
 - Los WAV se leen y se escriben sin `javax.sound`, así que la compilación nativa ya no genera `jsound.dll` y el ejecutable adelgaza unos 2 MB.

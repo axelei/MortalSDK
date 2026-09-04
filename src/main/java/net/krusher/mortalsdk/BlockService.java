@@ -34,10 +34,10 @@ public class BlockService {
         }
 
         Set<Integer> inScene = new HashSet<>();
-        List<SceneService.Scene> scenes = SceneService.find(blocks);
+        List<SceneService.Scene> scenes = SceneService.find(blocks, fileData);
         for (SceneService.Scene scene : scenes) {
             int[] palette = PaletteService.forBlock(scene.graphicsAddress(), fileData, palettes);
-            Bitmap image = SceneService.render(data.get(scene.mapAddress()),
+            Bitmap image = SceneService.render(SceneService.mapOf(scene, data, fileData),
                     data.get(scene.graphicsAddress()), palette);
             Png.write(image, SceneService.fileOf(scene));
             inScene.add(scene.mapAddress());
@@ -87,19 +87,25 @@ public class BlockService {
 
         // las pantallas que comparten bloque de gráficos se rehacen juntas, o una pisaría a las otras
         Map<Integer, List<SceneService.Scene>> byGraphics = new LinkedHashMap<>();
-        for (SceneService.Scene scene : SceneService.find(blocks)) {
+        for (SceneService.Scene scene : SceneService.find(blocks, originalData)) {
             byGraphics.computeIfAbsent(scene.graphicsAddress(), k -> new ArrayList<>()).add(scene);
         }
         for (Map.Entry<Integer, List<SceneService.Scene>> group : byGraphics.entrySet()) {
             List<SceneService.Input> inputs = new ArrayList<>();
             List<String> names = new ArrayList<>();
+            Set<Integer> rawMaps = new HashSet<>();
+            for (SceneService.Scene scene : group.getValue()) {
+                if (!scene.compressedMap()) {
+                    rawMaps.add(scene.mapAddress());
+                }
+            }
             for (SceneService.Scene scene : group.getValue()) {
                 File file = SceneService.fileOf(scene);
                 if (!file.exists()) {
                     continue;
                 }
                 inputs.add(new SceneService.Input(scene.mapAddress(),
-                        original.get(scene.mapAddress()), Png.read(file)));
+                        SceneService.mapOf(scene, original, originalData), Png.read(file)));
                 names.add(file.getName());
             }
             if (inputs.size() != group.getValue().size()) {
@@ -115,6 +121,11 @@ public class BlockService {
                 pending.put(group.getKey(), rebuilt.graphics());
                 origin.put(group.getKey(), String.join(", ", names));
                 for (Map.Entry<Integer, byte[]> map : rebuilt.maps().entrySet()) {
+                    if (rawMaps.contains(map.getKey())) {
+                        // mapa sin comprimir: se escribe tal cual, que ocupa lo mismo que ocupaba
+                        System.arraycopy(map.getValue(), 0, fileData, map.getKey(), map.getValue().length);
+                        continue;
+                    }
                     pending.put(map.getKey(), map.getValue());
                     origin.put(map.getKey(), String.join(", ", names));
                 }

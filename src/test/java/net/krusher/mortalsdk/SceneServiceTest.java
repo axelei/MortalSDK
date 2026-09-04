@@ -54,7 +54,7 @@ public class SceneServiceTest {
                 new RncService.Block(0x100000, 999, map(tiles)),
                 new RncService.Block(0x200000, 999, graphics(tiles)),
                 new RncService.Block(0x300000, 999, graphics(64)));
-        List<SceneService.Scene> scenes = SceneService.find(blocks);
+        List<SceneService.Scene> scenes = SceneService.find(blocks, new byte[0x400000]);
         assertEquals(1, scenes.size());
         assertEquals(0x100000, scenes.getFirst().mapAddress());
         assertEquals(0x200000, scenes.getFirst().graphicsAddress());
