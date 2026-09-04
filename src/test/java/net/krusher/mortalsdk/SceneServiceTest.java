@@ -1,5 +1,6 @@
 package net.krusher.mortalsdk;
 
+import org.junit.Before;
 import org.junit.Test;
 
 import java.util.List;
@@ -11,6 +12,16 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 public class SceneServiceTest {
+
+    @Before
+    public void useDefaultConfig() {
+        App.config = new Config();
+    }
+
+    private static SceneService.Rebuilt rebuildOne(Bitmap image, byte[] map, byte[] gfx, int[] palette)
+            throws java.io.IOException {
+        return SceneService.rebuild(gfx, List.of(new SceneService.Input(1, map, image)), palette);
+    }
 
     /** Unos gráficos con {@code tiles} tiles distintos y un mapa que los usa todos. */
     private static byte[] graphics(int tiles) {
@@ -60,9 +71,9 @@ public class SceneServiceTest {
         assertEquals(SceneService.COLUMNS * TileService.TILE_SIZE, image.getWidth());
         assertEquals(SceneService.ROWS * TileService.TILE_SIZE, image.getHeight());
 
-        SceneService.Rebuilt rebuilt = SceneService.rebuild(image, tileMap, gfx, palette);
+        SceneService.Rebuilt rebuilt = rebuildOne(image, tileMap, gfx, palette);
         assertArrayEquals("los gráficos deben salir intactos", gfx, rebuilt.graphics());
-        assertArrayEquals("el mapa debe salir intacto", tileMap, rebuilt.map());
+        assertArrayEquals("el mapa debe salir intacto", tileMap, rebuilt.maps().get(1));
     }
 
     @Test
@@ -79,8 +90,8 @@ public class SceneServiceTest {
             }
         }
 
-        SceneService.Rebuilt rebuilt = SceneService.rebuild(image, tileMap, gfx, palette);
-        Bitmap again = SceneService.render(rebuilt.map(), rebuilt.graphics(), palette);
+        SceneService.Rebuilt rebuilt = rebuildOne(image, tileMap, gfx, palette);
+        Bitmap again = SceneService.render(rebuilt.maps().get(1), rebuilt.graphics(), palette);
         for (int y = 0; y < image.getHeight(); y++) {
             for (int x = 0; x < image.getWidth(); x++) {
                 assertEquals("píxel " + x + "," + y, image.indexAt(x, y), again.indexAt(x, y));
@@ -101,14 +112,14 @@ public class SceneServiceTest {
 
         Bitmap image = SceneService.render(tileMap, gfx, palette);
         image.setIndex(0, 0, 7);
-        SceneService.Rebuilt rebuilt = SceneService.rebuild(image, tileMap, gfx, palette);
-        assertEquals("prioridad y línea de paleta", 0xA0, rebuilt.map()[0] & 0xE0);
+        SceneService.Rebuilt rebuilt = rebuildOne(image, tileMap, gfx, palette);
+        assertEquals("prioridad y línea de paleta", 0xA0, rebuilt.maps().get(1)[0] & 0xE0);
     }
 
     @Test
     public void refusesAnImageOfTheWrongSize() throws Exception {
         try {
-            SceneService.rebuild(Bitmap.indexed(64, 64, PaletteService.grayscale()),
+            rebuildOne(Bitmap.indexed(64, 64, PaletteService.grayscale()),
                     map(50), graphics(50), PaletteService.grayscale());
             fail("tendría que haber fallado");
         } catch (Exception e) {

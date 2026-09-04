@@ -8,6 +8,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -84,22 +85,42 @@ public class BlockService {
         Map<Integer, byte[]> pending = new LinkedHashMap<>();
         Map<Integer, String> origin = new LinkedHashMap<>();
 
+        // las pantallas que comparten bloque de gráficos se rehacen juntas, o una pisaría a las otras
+        Map<Integer, List<SceneService.Scene>> byGraphics = new LinkedHashMap<>();
         for (SceneService.Scene scene : SceneService.find(blocks)) {
-            File file = SceneService.fileOf(scene);
-            if (!file.exists()) {
+            byGraphics.computeIfAbsent(scene.graphicsAddress(), k -> new ArrayList<>()).add(scene);
+        }
+        for (Map.Entry<Integer, List<SceneService.Scene>> group : byGraphics.entrySet()) {
+            List<SceneService.Input> inputs = new ArrayList<>();
+            List<String> names = new ArrayList<>();
+            for (SceneService.Scene scene : group.getValue()) {
+                File file = SceneService.fileOf(scene);
+                if (!file.exists()) {
+                    continue;
+                }
+                inputs.add(new SceneService.Input(scene.mapAddress(),
+                        original.get(scene.mapAddress()), Png.read(file)));
+                names.add(file.getName());
+            }
+            if (inputs.size() != group.getValue().size()) {
+                Log.pnl();
+                Log.p("Faltan pantallas de las que comparten el bloque {0}, no se tocará.",
+                        toHexStringPadded(group.getKey()));
                 continue;
             }
-            int[] palette = PaletteService.forBlock(scene.graphicsAddress(), originalData, palettes);
+            int[] palette = PaletteService.forBlock(group.getKey(), originalData, palettes);
             try {
-                SceneService.Rebuilt rebuilt = SceneService.rebuild(Png.read(file),
-                        original.get(scene.mapAddress()), original.get(scene.graphicsAddress()), palette);
-                pending.put(scene.graphicsAddress(), rebuilt.graphics());
-                pending.put(scene.mapAddress(), rebuilt.map());
-                origin.put(scene.graphicsAddress(), file.getName());
-                origin.put(scene.mapAddress(), file.getName());
+                SceneService.Rebuilt rebuilt =
+                        SceneService.rebuild(original.get(group.getKey()), inputs, palette);
+                pending.put(group.getKey(), rebuilt.graphics());
+                origin.put(group.getKey(), String.join(", ", names));
+                for (Map.Entry<Integer, byte[]> map : rebuilt.maps().entrySet()) {
+                    pending.put(map.getKey(), map.getValue());
+                    origin.put(map.getKey(), String.join(", ", names));
+                }
             } catch (IOException e) {
                 Log.pnl();
-                Log.p("No se ha podido rehacer la pantalla {0}: {1}", file.getName(), e.getMessage());
+                Log.p("No se han podido rehacer las pantallas {0}: {1}", String.join(", ", names), e.getMessage());
             }
         }
 

@@ -56,6 +56,9 @@ public final class PaletteService {
             int red = (low >> 1) & CHANNEL_MAX;
             palette[i] = 0xFF000000 | (scale(red) << 16) | (scale(green) << 8) | scale(blue);
         }
+        // El color 0 es transparente: en pantalla se ve el color de fondo del VDP, no lo que guarde la
+        // paleta, que en muchas líneas trae un valor cualquiera. Se pinta negro, que es lo que se ve.
+        palette[0] = 0xFF000000;
         return palette;
     }
 

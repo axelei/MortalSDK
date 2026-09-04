@@ -14,17 +14,22 @@ import java.util.Set;
 
 /**
  * @param palettes qué paleta de la ROM se usa para dibujar cada bloque de gráficos, por dirección
+ * @param scenes   qué bloque de gráficos usa cada mapa de tiles, por dirección
  */
 public record Config(int minChars,
                      Set<Range> textRanges,
                      Set<Range> bins,
                      Set<Range> spaceRanges,
-                     Map<Integer, Integer> palettes) {
+                     Map<Integer, Integer> palettes,
+                     Map<Integer, Integer> scenes) {
 
     private static final int DEFAULT_MIN_CHARS = 5;
 
+    /** Valor de la parte derecha de un par cuando se escribe "-": ahí no hay nada. */
+    public static final int NONE = -1;
+
     public Config() {
-        this(DEFAULT_MIN_CHARS, Set.of(), Set.of(), Set.of(), Map.of());
+        this(DEFAULT_MIN_CHARS, Set.of(), Set.of(), Set.of(), Map.of(), Map.of());
     }
 
     public static Config getInstance(String fileName) throws IOException {
@@ -40,15 +45,16 @@ public record Config(int minChars,
         Set<Range> bins = parseRanges(binsStr);
         String spaceRangesStr = properties.getProperty("spaceRanges");
         Set<Range> spaceRanges = parseRanges(spaceRangesStr);
-        Map<Integer, Integer> palettes = parsePalettes(properties.getProperty("palettes"));
-        return new Config(minChars, textRanges, bins, spaceRanges, palettes);
+        Map<Integer, Integer> palettes = parsePairs(properties.getProperty("palettes"), "palettes");
+        Map<Integer, Integer> scenes = parsePairs(properties.getProperty("scenes"), "scenes");
+        return new Config(minChars, textRanges, bins, spaceRanges, palettes, scenes);
     }
 
     /**
-     * Lee la propiedad "palettes", con el formato {@code bloque,paleta#bloque,paleta}. Las direcciones van en
-     * hexadecimal, igual que en los nombres de los ficheros extraídos, y admiten el prefijo 0x.
+     * Lee una propiedad con el formato {@code a,b#a,b}. Las direcciones van en hexadecimal, igual que en los
+     * nombres de los ficheros extraídos, y admiten el prefijo 0x.
      */
-    private static Map<Integer, Integer> parsePalettes(String string) {
+    private static Map<Integer, Integer> parsePairs(String string, String property) {
         if (StringUtils.isBlank(string)) {
             return Map.of();
         }
@@ -56,9 +62,11 @@ public record Config(int minChars,
         for (String pair : string.split("#")) {
             int comma = pair.indexOf(',');
             if (comma < 0) {
-                throw new IllegalArgumentException("Paleta mal escrita en la configuración: " + pair);
+                throw new IllegalArgumentException("La propiedad " + property + " tiene un par mal escrito: " + pair);
             }
-            result.put(parseHex(pair.substring(0, comma)), parseHex(pair.substring(comma + 1)));
+            String value = pair.substring(comma + 1).trim();
+            // un "-" a la derecha sirve para decir que ahí no hay nada, y así descartar un emparejado
+            result.put(parseHex(pair.substring(0, comma)), value.equals("-") ? NONE : parseHex(value));
         }
         return result;
     }

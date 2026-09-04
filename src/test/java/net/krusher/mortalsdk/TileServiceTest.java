@@ -80,15 +80,23 @@ public class TileServiceTest {
     public void readsAGenesisPalette() {
         // 0000 BBB0 GGG0 RRR0: rojo del todo es 0x000E, verde 0x00E0, azul 0x0E00
         byte[] rom = new byte[PaletteService.SIZE];
-        rom[0] = 0x00; rom[1] = 0x0E;   // color 0: rojo
-        rom[2] = 0x00; rom[3] = (byte) 0xE0; // color 1: verde
-        rom[4] = 0x0E; rom[5] = 0x00;   // color 2: azul
+        rom[2] = 0x00; rom[3] = 0x0E;          // color 1: rojo
+        rom[4] = 0x00; rom[5] = (byte) 0xE0;   // color 2: verde
+        rom[6] = 0x0E; rom[7] = 0x00;          // color 3: azul
         int[] palette = PaletteService.readFromRom(rom, 0);
-        assertEquals(0xFFFF0000, palette[0]);
-        assertEquals(0xFF00FF00, palette[1]);
-        assertEquals(0xFF0000FF, palette[2]);
-        assertEquals(0xFF000000, palette[3]);
-        assertNotEquals(palette[0], palette[1]);
+        assertEquals(0xFFFF0000, palette[1]);
+        assertEquals(0xFF00FF00, palette[2]);
+        assertEquals(0xFF0000FF, palette[3]);
+        assertEquals(0xFF000000, palette[4]);
+        assertNotEquals(palette[1], palette[2]);
+    }
+
+    /** El color 0 es transparente: se ve el fondo del VDP, no lo que guarde la paleta. */
+    @Test
+    public void paintsColourZeroBlackWhateverTheRomSays() {
+        byte[] rom = new byte[PaletteService.SIZE];
+        rom[0] = 0x0E; rom[1] = 0x00;          // en la ROM el color 0 es azul
+        assertEquals(0xFF000000, PaletteService.readFromRom(rom, 0)[0]);
     }
 
 }

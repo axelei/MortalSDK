@@ -33,13 +33,29 @@ Se pueden editar. Al inyectar, si la imagen dibuja lo mismo que había, los dos 
 
 Como al rehacerlo se juntan los tiles repetidos, lo normal es que quepa; si aun así no cabe, se avisa y se deja el bloque como estaba. El tamaño de la imagen no se puede cambiar.
 
-La pareja se da por buena sólo cuando el bloque de gráficos tiene exactamente los tiles que el mapa usa y no hay otro candidato, que es señal de que se hizo para ese mapa. Con eso salen 5 de los 18 mapas; los demás usan bloques con más tiles de los que gastan y habría que rastrear en el código qué carga cada uno.
+Las parejas se indican en la configuración, con direcciones en hexadecimal:
+
+```properties
+scenes=2f2050,255000#1c8e90,1a15c0
+```
+
+Lo que no esté ahí se intenta emparejar solo: un mapa va con el bloque que tiene exactamente los tiles que usa, siempre que no haya otro candidato con esa misma cuenta. Acierta a menudo, pero no siempre —hay bloques que cuadran en número y no son la pareja—, así que un `-` a la derecha descarta un mapa que se empareje mal:
+
+```properties
+scenes=1ca6e0,-
+```
+
+Un mismo bloque de gráficos puede dar servicio a varias pantallas. En ese caso se rehacen todas juntas al inyectar, y los tiles que ya había no se renumeran, para no estropear las demás; sólo se añaden al final los que hagan falta.
+
+Ojo: si al inyectar un bloque se reubica por no caber, cambia de dirección, y entonces las direcciones de `scenes` se quedan viejas para esa ROM parcheada. Para volver a extraer de ella hay que actualizarlas.
 
 #### Paletas
 
-Una línea de paleta de Mega Drive son 16 palabras big-endian con el formato `0000 BBB0 GGG0 RRR0`.
+Una línea de paleta de Mega Drive son 16 palabras big-endian con el formato `0000 BBB0 GGG0 RRR0`. El color 0 es transparente —en pantalla se ve el color de fondo del VDP, no lo que guarde la paleta—, así que se dibuja negro, que es lo que se ve.
 
 Muchas se encuentran solas: el juego guarda tablas donde el puntero a la paleta va justo delante del puntero al bloque que la usa, así que se buscan esos pares comprobando que al otro lado hay de verdad formato CRAM. En esta ROM salen 31 bloques con su paleta.
+
+Las de las pantallas completas no aparecen así, y se han sacado siguiendo el código: la rutina de `0x12C7A` es la que vuelca paletas a CRAM (recibe hasta cuatro punteros en `a0`-`a3` y una máscara en `d0` que dice qué líneas cargar). Buscando quién la llama y qué tenía en `a0` salen las de la pantalla de título, «Test your might», los créditos, Goro y el marco de los dragones, todas comprobadas mirando el resultado.
 
 Lo que no aparezca así se puede indicar a mano, con direcciones en hexadecimal:
 
@@ -103,7 +119,9 @@ Sólo necesitas ejecutar: `mvn clean package`. En la carpeta `dist` tendrás el 
 
 - Los gráficos se extraen y se inyectan como PNG en vez de como volcados de tiles. Ya no se generan los `.bin`.
 - Los fondos que tienen mapa de tiles salen montados como pantalla de 320x224, y se pueden editar así.
+- Las parejas de mapa y gráficos se pueden indicar con la propiedad `scenes`.
 - Las paletas de los gráficos se buscan solas en la ROM; también se pueden indicar a mano.
+- La configuración trae las paletas de nueve de las once pantallas, sacadas del código que las carga.
 - Los WAV se leen y se escriben sin `javax.sound`, así que la compilación nativa ya no genera `jsound.dll` y el ejecutable adelgaza unos 2 MB.
 - El método 2 de RNC ya da los mismos bytes que la herramienta original (antes salía alguno más largo).
 - `dist` ya no se queda con el ejecutable de la compilación anterior.

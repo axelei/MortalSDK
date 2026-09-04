@@ -5,7 +5,10 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
+import java.util.HashSet;
 
 /**
  * Pantallas completas: un mapa de tiles de la ROM más el bloque de gráficos al que apunta.
@@ -45,12 +48,34 @@ public final class SceneService {
     }
 
     /**
-     * Busca pantallas entre los bloques ya descomprimidos: un mapa es un bloque de exactamente 40x28
-     * casillas, y sus gráficos son el bloque que tiene justo los tiles que el mapa usa. Sólo se acepta
-     * cuando la cuenta cuadra exactamente y no hay más de un candidato, que es señal de que ese bloque de
-     * gráficos se hizo para ese mapa.
+     * Busca pantallas entre los bloques ya descomprimidos.
+     * <p>
+     * Primero se hace caso a las parejas que diga la configuración. Después se emparejan solas las que no
+     * dejan lugar a dudas: un mapa es un bloque de exactamente 40x28 casillas, y sus gráficos son el bloque
+     * que tiene justo los tiles que el mapa usa, sin que haya otro candidato con esa misma cuenta.
      */
     public static List<Scene> find(List<RncService.Block> blocks) {
+        Map<Integer, Integer> lengths = new HashMap<>();
+        for (RncService.Block block : blocks) {
+            lengths.put(block.address(), block.data().length);
+        }
+        List<Scene> scenes = new ArrayList<>();
+        Set<Integer> takenMaps = new HashSet<>();
+        for (Map.Entry<Integer, Integer> pair : App.config.scenes().entrySet()) {
+            if (pair.getValue() == Config.NONE) {
+                takenMaps.add(pair.getKey());   // dicho a mano: este mapa no forma pantalla
+                continue;
+            }
+            Integer mapLength = lengths.get(pair.getKey());
+            if (mapLength == null || mapLength != MAP_BYTES || !lengths.containsKey(pair.getValue())) {
+                Log.pnl("La pantalla {0} de la configuración no cuadra con la ROM, se ignora.",
+                        Integer.toHexString(pair.getKey()));
+                continue;
+            }
+            scenes.add(new Scene(pair.getKey(), pair.getValue()));
+            takenMaps.add(pair.getKey());
+        }
+
         Map<Integer, List<Integer>> byTileCount = new HashMap<>();
         for (RncService.Block block : blocks) {
             if (block.data().length % TileService.TILE_BYTES == 0) {
@@ -58,9 +83,8 @@ public final class SceneService {
                         .add(block.address());
             }
         }
-        List<Scene> scenes = new ArrayList<>();
         for (RncService.Block block : blocks) {
-            if (block.data().length != MAP_BYTES) {
+            if (block.data().length != MAP_BYTES || takenMaps.contains(block.address())) {
                 continue;
             }
             int needed = 0;
@@ -96,69 +120,110 @@ public final class SceneService {
         return image;
     }
 
-    /** Lo que sale de rehacer una pantalla: los dos bloques que hay que volver a meter en la ROM. */
-    public record Rebuilt(byte[] graphics, byte[] map) {}
+    /** Una pantalla lista para rehacer: su mapa original y la imagen que ha quedado. */
+    public record Input(int mapAddress, byte[] map, Bitmap image) {}
+
+    /** Lo que sale de rehacer: el bloque de gráficos y el mapa de cada pantalla, por dirección. */
+    public record Rebuilt(byte[] graphics, Map<Integer, byte[]> maps) {}
 
     /**
-     * Reconstruye los gráficos y el mapa a partir de la imagen.
+     * Reconstruye un bloque de gráficos y los mapas de todas las pantallas que lo usan.
      * <p>
-     * Si la imagen dibuja exactamente lo mismo que ya había, se devuelven los bloques originales tal cual,
-     * así que una pantalla que no se ha tocado vuelve a salir idéntica byte a byte. En cuanto cambia algo se
-     * rehace todo desde cero: la imagen se parte en casillas de 8x8 y se van juntando las repetidas mirando
-     * también los cuatro volteos, con lo que suele hacer falta menos sitio que antes. De cada casilla se
-     * conservan la prioridad y la línea de paleta, que no se pueden deducir de los píxeles.
+     * Se rehacen juntas a propósito: varias pantallas pueden compartir el mismo bloque, y si cada una lo
+     * reconstruyese por su cuenta la última pisaría a las demás.
+     * <p>
+     * Si ninguna imagen dibuja nada distinto de lo que ya había, se devuelven los bloques originales tal
+     * cual, así que lo que no se toca vuelve a salir idéntico byte a byte.
+     * <p>
+     * Si algo ha cambiado hay dos maneras. Cuando el bloque es de una sola pantalla se rehace desde cero,
+     * juntando los tiles repetidos y los cuatro volteos, con lo que suele ocupar menos. Si lo comparten
+     * varias no se pueden renumerar los tiles sin estropear el resto, así que se respetan los que ya había
+     * y sólo se añaden al final los que hagan falta.
+     * <p>
+     * De cada casilla se conservan la prioridad y la línea de paleta, que no salen de los píxeles.
      */
-    public static Rebuilt rebuild(Bitmap image, byte[] originalMap, byte[] originalGraphics, int[] palette)
+    public static Rebuilt rebuild(byte[] originalGraphics, List<Input> inputs, int[] palette)
             throws IOException {
-        if (image.getWidth() != COLUMNS * TileService.TILE_SIZE
-                || image.getHeight() != ROWS * TileService.TILE_SIZE) {
-            throw new IOException("La pantalla debe medir " + (COLUMNS * TileService.TILE_SIZE) + "x"
-                    + (ROWS * TileService.TILE_SIZE) + " y mide " + image.getWidth() + "x" + image.getHeight());
+        for (Input input : inputs) {
+            if (input.image().getWidth() != COLUMNS * TileService.TILE_SIZE
+                    || input.image().getHeight() != ROWS * TileService.TILE_SIZE) {
+                throw new IOException("La pantalla debe medir " + (COLUMNS * TileService.TILE_SIZE) + "x"
+                        + (ROWS * TileService.TILE_SIZE) + " y mide "
+                        + input.image().getWidth() + "x" + input.image().getHeight());
+            }
         }
 
-        int[][] cells = new int[CELLS][];
+        Map<Integer, int[][]> cells = new LinkedHashMap<>();
         boolean changed = false;
-        for (int cell = 0; cell < CELLS; cell++) {
-            cells[cell] = cellOf(image, palette, cell);
-            changed |= !draws(originalGraphics, readWord(originalMap, cell * 2), cells[cell]);
+        for (Input input : inputs) {
+            int[][] own = new int[CELLS][];
+            for (int cell = 0; cell < CELLS; cell++) {
+                own[cell] = cellOf(input.image(), palette, cell);
+                changed |= !draws(originalGraphics, readWord(input.map(), cell * 2), own[cell]);
+            }
+            cells.put(input.mapAddress(), own);
         }
         if (!changed) {
-            return new Rebuilt(originalGraphics, originalMap);
+            Map<Integer, byte[]> maps = new LinkedHashMap<>();
+            for (Input input : inputs) {
+                maps.put(input.mapAddress(), input.map());
+            }
+            return new Rebuilt(originalGraphics, maps);
         }
 
+        boolean shared = inputs.size() > 1;
         List<int[]> tiles = new ArrayList<>();
         Map<String, Integer> known = new HashMap<>();
-        byte[] map = originalMap.clone();
-        for (int cell = 0; cell < CELLS; cell++) {
-            int index = -1;
-            int flips = 0;
-            for (int flip = 0; flip < 4 && index < 0; flip++) {
-                Integer found = known.get(keyOf(orient(cells[cell], flip)));
-                if (found != null) {
-                    index = found;
-                    flips = flip;
-                }
-            }
-            if (index < 0) {
-                index = tiles.size();
-                if (index >= MAX_TILES) {
-                    throw new IOException("La pantalla necesita más de " + MAX_TILES + " tiles distintos");
-                }
-                tiles.add(cells[cell]);
-                known.put(keyOf(cells[cell]), index);
-            }
-            writeWord(map, cell * 2, (readWord(originalMap, cell * 2) & 0xE000)
-                    | ((flips & 1) != 0 ? 0x0800 : 0)
-                    | ((flips & 2) != 0 ? 0x1000 : 0)
-                    | index);
+        int keep = shared ? originalGraphics.length / TileService.TILE_BYTES : 0;
+        for (int i = 0; i < keep; i++) {
+            tiles.add(tileOf(originalGraphics, i));
+        }
+        for (int i = tiles.size() - 1; i >= 0; i--) {
+            known.put(keyOf(tiles.get(i)), i);
         }
 
-        // el bloque se queda con los tiles que se usan y nada más, para que siga cuadrando con el mapa
-        byte[] graphics = new byte[tiles.size() * TileService.TILE_BYTES];
-        for (int i = 0; i < tiles.size(); i++) {
+        Map<Integer, byte[]> maps = new LinkedHashMap<>();
+        for (Input input : inputs) {
+            int[][] own = cells.get(input.mapAddress());
+            byte[] map = input.map().clone();
+            for (int cell = 0; cell < CELLS; cell++) {
+                int original = readWord(input.map(), cell * 2);
+                if (shared && draws(originalGraphics, original, own[cell])) {
+                    continue;
+                }
+                int index = -1;
+                int flips = 0;
+                for (int flip = 0; flip < 4 && index < 0; flip++) {
+                    Integer found = known.get(keyOf(orient(own[cell], flip)));
+                    if (found != null) {
+                        index = found;
+                        flips = flip;
+                    }
+                }
+                if (index < 0) {
+                    index = tiles.size();
+                    if (index >= MAX_TILES) {
+                        throw new IOException("La pantalla necesita más de " + MAX_TILES + " tiles distintos");
+                    }
+                    tiles.add(own[cell]);
+                    known.putIfAbsent(keyOf(own[cell]), index);
+                }
+                writeWord(map, cell * 2, (original & 0xE000)
+                        | ((flips & 1) != 0 ? 0x0800 : 0)
+                        | ((flips & 2) != 0 ? 0x1000 : 0)
+                        | index);
+            }
+            maps.put(input.mapAddress(), map);
+        }
+
+        byte[] graphics = shared
+                ? java.util.Arrays.copyOf(originalGraphics,
+                        Math.max(originalGraphics.length, tiles.size() * TileService.TILE_BYTES))
+                : new byte[tiles.size() * TileService.TILE_BYTES];
+        for (int i = keep; i < tiles.size(); i++) {
             packTile(tiles.get(i), graphics, i * TileService.TILE_BYTES);
         }
-        return new Rebuilt(graphics, map);
+        return new Rebuilt(graphics, maps);
     }
 
     /** ¿La casilla, tal y como está en el mapa, sigue dibujando esos mismos píxeles? */
