@@ -137,8 +137,6 @@ La tabla son entradas de ocho bytes: identificador (1), dirección del PCM (3), 
 
 Se generará un fichero nuevo con los recursos inyectados. Si se especifica `configuracion.properties` se usará esta.
 
-Los samples se inyectan después de los textos: los dos se reparten el espacio libre de `spaceRanges`, y una traducción que no cabe se pierde, mientras que un sample que no cabe se queda como estaba.
-
 Con los samples PCM se sigue este criterio:
 
 - Si se ha borrado su WAV de la carpeta `extracted`, el sample original se queda como está.
@@ -225,7 +223,6 @@ Sólo necesitas ejecutar: `mvn clean package`. En la carpeta `dist` tendrás el 
 
 ## Cambios recientes
 
-- Los samples se inyectan después de los textos, para que una traducción que no quepa no se quede sin sitio.
 - Los avisos de los samples dicen el nombre del fichero, no el número del sample.
 - La propiedad `skipRoutines` anula rutinas con un `rts`; con ella se quita el logo de Sega y la intro pasa a ser lo primero que se ve.
 - Los bloques sin comprimir de `bins` también se extraen y se inyectan como PNG, no en crudo.

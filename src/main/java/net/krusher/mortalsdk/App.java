@@ -73,26 +73,20 @@ public class App {
         Log.pnl("Inyectando bloques...");
         File extractedDir = new File("extracted");
         File[] extractedFiles = extractedDir.listFiles();
-        boolean hayExtraidos = extractedFiles != null && extractedFiles.length > 0;
-        if (!hayExtraidos) {
+        if (extractedFiles == null || extractedFiles.length == 0) {
             Log.pnl("No se encontraron archivos extraídos en la carpeta 'extracted'");
         } else {
             Log.p("Inyectando bloques comprimidos:");
             BlockService.injectCompressedBlocks(extractedFiles, fileData, originalData);
+            Log.p("Inyectando samples PCM:");
+            SampleService.inject(extractedFiles, fileData, originalData);
             Log.pnl();
             Log.p("Inyectando bloques sin comprimir:");
             BlockService.injectUncompressedBlocks(extractedFiles, fileData, originalData, "bin", config.bins());
             Log.pnl();
         }
-        // Los textos van antes que los samples: los dos se reparten el espacio libre de spaceRanges, y una
-        // traducción que no cabe se pierde, mientras que un sample que no cabe se queda como estaba.
         Log.pnl("Inyectando textos...");
         TexticleService.insertTexticles(file, fileData, originalData);
-        if (hayExtraidos) {
-            Log.p("Inyectando samples PCM:");
-            SampleService.inject(extractedFiles, fileData, originalData);
-            Log.pnl();
-        }
         CodeService.skipRoutines(fileData);
         Log.pnl("Inyección terminada.");
         // la intro va la última, sobre la ROM ya reescrita, y antes del checksum
