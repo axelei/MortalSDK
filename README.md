@@ -9,9 +9,31 @@ Extractor e insertor de bloques comprimidos y textos de Mortal Kombat (Mega Driv
 
 `MortalSDK x "mortal kombat.bin" [configuracion.properties]`
 
-En la carpeta `extracted` se generarán los bloques descomprimidos. Los gráficos están en formato tiles de Mega Drive, es decir, 4bpp linear. El texto estará en el nombre de la ROM más `.txt`. Si se especifica `configuracion.properties` se usará esta.
+En la carpeta `extracted` se generarán los bloques descomprimidos como PNG, en `data_<direccion>.png`. El texto estará en el nombre de la ROM más `.txt`. Si se especifica `configuracion.properties` se usará esta.
 
 En la carpeta `configs` hay un ejemplo de configuración que estoy usando para mi proyecto personal.
+
+### Gráficos
+
+Los bloques comprimidos se dibujan como hojas de tiles de Mega Drive: 8x8 píxeles de 4 bits, dos píxeles por byte, 32 bytes por tile, 16 tiles por fila. El PNG sale indexado de 4 bits, así que al abrirlo se sigue trabajando con los 16 índices que guarda la ROM.
+
+Lo que se lee del PNG al inyectar son los índices, no los colores. La paleta es sólo para poder ver el dibujo: da igual acertar con ella, la ida y vuelta sale exacta de todos modos. Si el editor ha convertido el PNG a color, se busca para cada píxel el color más parecido de la paleta.
+
+No hace falta que un bloque sea un número redondo de tiles: la última fila se rellena y al volver se recorta al tamaño que tenía en la ROM. Tampoco todos los bloques comprimidos son gráficos; los que no lo son se ven como ruido, pero van y vuelven igual de bien.
+
+El ancho del PNG marca cuántos tiles hay por fila, así que conviene no cambiarlo. Si se cambia, se avisa por consola.
+
+#### Paletas
+
+Una línea de paleta de Mega Drive son 16 palabras big-endian con el formato `0000 BBB0 GGG0 RRR0`. Qué paleta le toca a cada bloque no se puede deducir de la ROM sin los mapas de tiles, así que por defecto se usa una rampa de grises, que deja los 16 índices bien distinguibles.
+
+Para ver un bloque con sus colores de verdad se indica a mano en la configuración, con direcciones en hexadecimal:
+
+```properties
+palettes=1959bc,19597a
+```
+
+La configuración incluida trae ese caso, que es el único confirmado: la paleta de `0x19597A` da los colores de escenario del bloque `0x1959BC`.
 
 Los samples PCM se extraen a WAV. No hay que configurarlos: se busca en la ROM la tabla que los describe y se vuelca cada entrada a `sample_<id>_<direccion>.wav`, con la frecuencia a la que el juego reproduce ese sample.
 
@@ -58,7 +80,6 @@ Sólo necesitas ejecutar: `mvn clean package`. En la carpeta `dist` tendrás el 
 
 ## Cosas por hacer (no necesariamente en orden)
 
-- Extraer paletas
 - Mejorar la extracción de textos
 - Internacionalizar los mensajes
 - Crear tests unitarios
@@ -66,6 +87,8 @@ Sólo necesitas ejecutar: `mvn clean package`. En la carpeta `dist` tendrás el 
 
 ## Cambios recientes
 
+- Los gráficos se extraen y se inyectan como PNG en vez de como volcados de tiles. Ya no se generan los `.bin`.
+- Se pueden asignar paletas de la ROM a los bloques para verlos con sus colores.
 - Los WAV se leen y se escriben sin `javax.sound`, así que la compilación nativa ya no genera `jsound.dll` y el ejecutable adelgaza unos 2 MB.
 - El método 2 de RNC ya da los mismos bytes que la herramienta original (antes salía alguno más largo).
 - `dist` ya no se queda con el ejecutable de la compilación anterior.

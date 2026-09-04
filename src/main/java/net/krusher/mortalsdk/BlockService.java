@@ -26,8 +26,9 @@ public class BlockService {
     public static void extractCompressedBlocks(byte[] fileData) throws IOException {
         List<RncService.Block> blocks = RncService.search(fileData);
         for (RncService.Block block : blocks) {
-            Path target = Paths.get("extracted", "data_" + toHexStringPadded(block.address()) + ".bin");
-            Files.write(target, block.data());
+            int[] palette = PaletteService.forBlock(block.address(), fileData);
+            Bitmap image = TileService.toBitmap(block.data(), palette);
+            Png.write(image, new File("extracted", "data_" + toHexStringPadded(block.address()) + ".png"));
         }
         Log.pnl("Bloques comprimidos extraídos: {0}", blocks.size());
     }
@@ -39,12 +40,14 @@ public class BlockService {
      */
     public static void injectCompressedBlocks(File[] extractedFiles, byte[] fileData, byte[] originalData) throws IOException {
         Map<Integer, Integer> room = new HashMap<>();
+        Map<Integer, Integer> sizes = new HashMap<>();
         for (RncService.Block block : RncService.search(originalData)) {
             room.put(block.address(), block.packedSize());
+            sizes.put(block.address(), block.data().length);
         }
         for (File extractedFile : extractedFiles) {
             String name = extractedFile.getName();
-            if (!name.startsWith("data_")) {
+            if (!name.startsWith("data_") || !name.endsWith(".png")) {
                 continue;
             }
             int address = parseAddress(name);
@@ -54,7 +57,14 @@ public class BlockService {
                 Log.p("El bloque {0} no estaba comprimido en la ROM original, no se inyectará.", name);
                 continue;
             }
-            byte[] blockData = Files.readAllBytes(extractedFile.toPath());
+            int[] palette = PaletteService.forBlock(address, originalData);
+            Bitmap image = Png.read(extractedFile);
+            if (image.getWidth() != TileService.COLUMNS * TileService.TILE_SIZE) {
+                Log.pnl();
+                Log.p("Alerta: {0} mide {1} de ancho y deberían ser {2}; el orden de los tiles depende del ancho.",
+                        name, image.getWidth(), TileService.COLUMNS * TileService.TILE_SIZE);
+            }
+            byte[] blockData = TileService.toTiles(image, palette, sizes.get(address));
             byte[] compressedData;
             try {
                 compressedData = RncService.pack(blockData, RncService.METHOD_1);

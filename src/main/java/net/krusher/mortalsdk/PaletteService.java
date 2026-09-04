@@ -1,0 +1,65 @@
+package net.krusher.mortalsdk;
+
+/**
+ * Paletas de Mega Drive.
+ * <p>
+ * Una línea de CRAM son 16 palabras big-endian con el formato {@code 0000 BBB0 GGG0 RRR0}: tres bits por
+ * canal, y el resto de bits a cero.
+ * <p>
+ * Qué paleta le toca a cada bloque de gráficos no se puede deducir de la ROM sin los mapas de tiles, así que
+ * por defecto se usa una rampa de grises y las paletas de verdad se indican a mano en la configuración. La
+ * paleta es sólo para poder ver el gráfico: lo que se guarda en el PNG son los índices, que es lo que hay en
+ * la ROM, de modo que la ida y vuelta no depende de haber acertado con los colores.
+ */
+public final class PaletteService {
+
+    public static final int COLORS = 16;
+    public static final int SIZE = COLORS * 2;
+
+    private static final int CHANNEL_MAX = 7;
+
+    private PaletteService() {}
+
+    /** Rampa de grises, que deja los 16 índices distinguibles a ojo. */
+    public static int[] grayscale() {
+        int[] palette = new int[COLORS];
+        for (int i = 0; i < COLORS; i++) {
+            int value = i * 17;
+            palette[i] = 0xFF000000 | (value << 16) | (value << 8) | value;
+        }
+        return palette;
+    }
+
+    /** Lee una línea de CRAM de la ROM y la pasa a ARGB. */
+    public static int[] readFromRom(byte[] fileData, int offset) {
+        if (offset < 0 || offset + SIZE > fileData.length) {
+            throw new IllegalArgumentException("La paleta de " + Integer.toHexString(offset) + " no cabe en la ROM");
+        }
+        int[] palette = new int[COLORS];
+        for (int i = 0; i < COLORS; i++) {
+            int high = fileData[offset + i * 2] & 0xFF;
+            int low = fileData[offset + i * 2 + 1] & 0xFF;
+            int blue = (high >> 1) & CHANNEL_MAX;
+            int green = (low >> 5) & CHANNEL_MAX;
+            int red = (low >> 1) & CHANNEL_MAX;
+            palette[i] = 0xFF000000 | (scale(red) << 16) | (scale(green) << 8) | scale(blue);
+        }
+        return palette;
+    }
+
+    private static int scale(int channel) {
+        return Math.round(channel * 255f / CHANNEL_MAX);
+    }
+
+    /**
+     * La paleta con la que se dibuja un bloque: la que diga la configuración, o grises si no hay ninguna.
+     */
+    public static int[] forBlock(int blockAddress, byte[] fileData) {
+        Integer paletteAddress = App.config.palettes().get(blockAddress);
+        if (paletteAddress == null) {
+            return grayscale();
+        }
+        return readFromRom(fileData, paletteAddress);
+    }
+
+}
