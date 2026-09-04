@@ -16,6 +16,8 @@ import java.util.Set;
  * @param palettes qué paleta de la ROM se usa para dibujar cada bloque de gráficos, por dirección
  * @param scenes   qué bloque de gráficos usa cada mapa de tiles, por dirección
  * @param texts    si no está vacío, las únicas direcciones de texto que se extraen
+ * @param intro    fichero con la ROM de la intro que se pone delante del juego, si se quiere
+ * @param introSpace zonas de la ROM que puede usar la intro para repartir sus trozos
  */
 public record Config(int minChars,
                      Set<Range> textRanges,
@@ -23,7 +25,9 @@ public record Config(int minChars,
                      Set<Range> spaceRanges,
                      Map<Integer, Integer> palettes,
                      Map<Integer, Integer> scenes,
-                     Set<Integer> texts) {
+                     Set<Integer> texts,
+                     String intro,
+                     Set<Range> introSpace) {
 
     private static final int DEFAULT_MIN_CHARS = 5;
 
@@ -31,7 +35,7 @@ public record Config(int minChars,
     public static final int NONE = -1;
 
     public Config() {
-        this(DEFAULT_MIN_CHARS, Set.of(), Set.of(), Set.of(), Map.of(), Map.of(), Set.of());
+        this(DEFAULT_MIN_CHARS, Set.of(), Set.of(), Set.of(), Map.of(), Map.of(), Set.of(), null, Set.of());
     }
 
     public static Config getInstance(String fileName) throws IOException {
@@ -50,7 +54,9 @@ public record Config(int minChars,
         Map<Integer, Integer> palettes = parsePairs(properties.getProperty("palettes"), "palettes");
         Map<Integer, Integer> scenes = parsePairs(properties.getProperty("scenes"), "scenes");
         Set<Integer> texts = parseAddresses(properties.getProperty("texts"));
-        return new Config(minChars, textRanges, bins, spaceRanges, palettes, scenes, texts);
+        String intro = properties.getProperty("intro");
+        Set<Range> introSpace = parseRanges(properties.getProperty("introSpace"));
+        return new Config(minChars, textRanges, bins, spaceRanges, palettes, scenes, texts, intro, introSpace);
     }
 
     /**
@@ -88,6 +94,14 @@ public record Config(int minChars,
         return result;
     }
 
+    /** Un número de la configuración: decimal, o hexadecimal si lleva delante 0x. */
+    private static int parseNumber(String value) {
+        String trimmed = value.trim();
+        return trimmed.startsWith("0x") || trimmed.startsWith("0X")
+                ? Integer.parseInt(trimmed.substring(2), 16)
+                : Integer.parseInt(trimmed);
+    }
+
     private static int parseHex(String value) {
         String trimmed = value.trim();
         if (trimmed.startsWith("0x") || trimmed.startsWith("0X")) {
@@ -104,8 +118,8 @@ public record Config(int minChars,
         String[] ranges = string.split("#");
         for (String range : ranges) {
             result.add(Range.of(
-                    Integer.parseInt(range.substring(0, range.indexOf(','))),
-                    Integer.parseInt(range.substring(range.indexOf(',') + 1))
+                    parseNumber(range.substring(0, range.indexOf(','))),
+                    parseNumber(range.substring(range.indexOf(',') + 1))
             ));
         }
         return result;

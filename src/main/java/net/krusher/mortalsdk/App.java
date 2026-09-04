@@ -88,6 +88,9 @@ public class App {
         Log.pnl("Inyectando textos...");
         TexticleService.insertTexticles(file, fileData);
         Log.pnl("Inyección terminada.");
+        // la intro va la última, sobre la ROM ya reescrita, y antes del checksum
+        Log.pnl("Inyectando intro...");
+        IntroService.inject(fileData, originalData);
         Log.pnl("Arreglando checksum...");
         Checksum.fixChecksum(fileData);
         Log.pnl("Escribiendo salida...");

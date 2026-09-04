@@ -107,6 +107,28 @@ Se admite cualquier WAV PCM de 8 o 16 bits, mono o estéreo, y a cualquier frecu
 
 Los bloques de `bins` nunca se reubican ni cambian de tamaño, porque no tienen por qué ser direccionables por puntero.
 
+### Intro
+
+Se puede poner una intro delante del juego: al encender se ve la intro, y con START (o A), o pasado un rato, entra al juego. Se activa con dos propiedades:
+
+```properties
+intro=charnego_introFinal.md
+introSpace=0x396000,0x3AFEFF#0x3D0A00,0x3EFEFF
+```
+
+`intro` es la ROM de Mega Drive de la intro, e `introSpace` las zonas de la ROM que puede usar para repartir sus trozos. Si falta cualquiera de las dos, este paso no hace nada.
+
+El juego se queda donde está, porque su código está lleno de direcciones absolutas. La intro se parte en trozos —código, 16 fotogramas comprimidos con RLE, la muestra PCM y el driver Z80—, se reparten por los huecos que se le indiquen, y sus direcciones absolutas se recolocan a donde haya caído cada uno. Después se cambia el vector RESET para que apunte a un arranque nuestro, que desbloquea el TMSS y salta a la intro; al salir se callan el PSG y el YM2612, se resetea el Z80 y se devuelve el control a la entrada original del juego, que se lee de los vectores y no se supone.
+
+Sobre el espacio hay dos cosas que tener en cuenta:
+
+- Los huecos de `introSpace` los indica quien prepara la configuración, y el programa no puede saber si el juego lee de verdad esos bytes. Que estén a cero no lo demuestra.
+- Lo que ya use `spaceRanges` se descuenta solo, porque de ahí tiran los textos y los bloques. Y antes de escribir nada se comprueba trozo a trozo contra la ROM original: si un byte de la zona ya lo había cambiado un paso anterior, se aborta en vez de comerse una reubicación.
+
+La ROM no crece: si los trozos no caben en los huecos indicados, se avisa.
+
+Esto viene del insertador de intros de CholeilSDK, que a su vez viene de `insertar_intro.py` de ScorpioN-MsX. Va atado a una intro concreta y se niega a funcionar con otra, porque recolocar a ciegas una que no conoce daría una ROM rota.
+
 ## Requisitos
 
 Ninguno aparte de Java: la compresión RNC ProPack va incluida, así que ya no hace falta `rnc_propack_x64.exe` ni ningún otro programa externo.
@@ -144,6 +166,8 @@ Sólo necesitas ejecutar: `mvn clean package`. En la carpeta `dist` tendrás el 
 - En el fichero de textos las direcciones van en hexadecimal y el puntero dice si es absoluto o un `lea`.
 - Se reconocen los punteros `lea (d16,PC)`, y con ellos se reubican textos si el hueco queda a tiro.
 - La propiedad `texts` limita la extracción a las direcciones que se le indiquen.
+- Se puede poner una intro delante del juego con `intro` e `introSpace`.
+- Los rangos de la configuración admiten hexadecimal con el prefijo `0x`.
 - Las paletas de los gráficos se buscan solas en la ROM; también se pueden indicar a mano.
 - La configuración trae las paletas de nueve de las once pantallas, sacadas del código que las carga.
 - Los WAV se leen y se escriben sin `javax.sound`, así que la compilación nativa ya no genera `jsound.dll` y el ejecutable adelgaza unos 2 MB.
