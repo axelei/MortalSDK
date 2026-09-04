@@ -195,25 +195,29 @@ public final class SampleService {
             return;
         }
         if (pcm.length == 0 || pcm.length > MAX_LENGTH) {
-            Log.pnl("El sample {0} tiene {1} bytes y la tabla solo admite de 1 a {2}, no se inyectará.",
-                    sample.id(), pcm.length, MAX_LENGTH);
+            Log.pnl();
+            Log.pnl("{0} tiene {1} bytes y la tabla solo admite de 1 a {2}, no se inyectará.",
+                    file.getName(), pcm.length, MAX_LENGTH);
             return;
         }
         if (wav.sampleRate() != frequencyOf(rate)) {
-            Log.pnl("El sample {0} se reproducirá a {1} Hz, lo más cercano a los {2} Hz del WAV.",
-                    sample.id(), frequencyOf(rate), wav.sampleRate());
+            Log.pnl();
+            Log.pnl("{0} se reproducirá a {1} Hz, lo más cercano a los {2} Hz del WAV.",
+                    file.getName(), frequencyOf(rate), wav.sampleRate());
         }
         int offset = sample.offset();
         if (pcm.length > sample.length()) {
             Integer newOffset = TexticleService.getNewAddress(pcm.length, BANK_SIZE);
             if (Objects.isNull(newOffset) || newOffset + pcm.length > fileData.length) {
-                Log.pnl("El sample {0} ocupa {1} bytes, más que los {2} de su hueco, y no hay espacio libre. No se inyectará.",
-                        sample.id(), pcm.length, sample.length());
+                Log.pnl();
+                Log.pnl("{0} ocupa {1} bytes, más que los {2} de su hueco, y no hay espacio libre. No se inyectará.",
+                        file.getName(), pcm.length, sample.length());
                 return;
             }
             offset = newOffset;
-            Log.pnl("El sample {0} ocupa {1} bytes, más que los {2} de su hueco: se mueve a {3}.",
-                    sample.id(), pcm.length, sample.length(), toHex(offset));
+            Log.pnl();
+            Log.pnl("{0} ocupa {1} bytes, más que los {2} de su hueco: se mueve a {3}.",
+                    file.getName(), pcm.length, sample.length(), toHex(offset));
         }
         // Los samples van pegados unos a otros, así que si el nuevo es más corto no se rellena el sobrante:
         // solo se acorta la longitud de la entrada.
