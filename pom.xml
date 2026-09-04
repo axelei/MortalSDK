@@ -96,7 +96,9 @@
             <executions>
               <execution>
                 <id>native-compile</id>
-                <phase>package</phase>
+                <!-- Antes de "package": ahí es donde maven-resources-plugin copia el resultado a "dist",
+                     y si el ejecutable se generase en la misma fase se copiaría el de la vez anterior. -->
+                <phase>prepare-package</phase>
                 <goals>
                   <goal>compile-no-fork</goal>
                 </goals>

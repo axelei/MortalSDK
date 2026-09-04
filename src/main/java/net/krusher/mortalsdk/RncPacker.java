@@ -298,7 +298,12 @@ final class RncPacker {
                 if (maxCount > maxMatches) {
                     maxCount = maxMatches;
                 }
-                if (maxCount > matchCount || (maxCount == matchCount && maxCount < maxMatches)) {
+                // En empate nos quedamos con la coincidencia más cercana, que es la última de la cadena.
+                // El código decompilado pone aquí "maxCount > matchCount || (maxCount == matchCount &&
+                // maxCount < maxMatches)", que en los empates al tope de maxMatches deja la más lejana; con
+                // eso el método 2 sale unos bytes más largo que el de la herramienta original y el 1 no
+                // cambia, porque casi nunca llega a su tope de 0x1000. Así salen idénticos los dos.
+                if (maxCount >= matchCount) {
                     matchCount = maxCount;
                     matchOffset = minOffset;
                 }

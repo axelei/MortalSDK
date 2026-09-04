@@ -38,13 +38,15 @@ Los bloques de `bins` nunca se reubican ni cambian de tamaño, porque no tienen 
 
 Ninguno aparte de Java: la compresión RNC ProPack va incluida, así que ya no hace falta `rnc_propack_x64.exe` ni ningún otro programa externo.
 
+Compilado con GraalVM sale un único `.exe`, sin ninguna DLL al lado. Los WAV se leen y se escriben a mano en vez de con `javax.sound`, que vive en el módulo java.desktop y arrastra código nativo: usándolo, la compilación nativa dejaba un `jsound.dll` junto al ejecutable que había que repartir con él.
+
 Con pequeños ajustes en la configuración se puede usar con otras ROMs y otros sistemas operativos. Añade un 'issue' si tienes alguna propuesta de cambio.
 
 ### Sobre la compresión RNC
 
 Están los dos métodos, el 1 (Huffman + LZ77) y el 2. Los bloques se buscan por toda la ROM, se descomprimen y, al inyectar, se vuelven a comprimir.
 
-El método 1 da exactamente los mismos bytes que la herramienta original: se ha comprobado con los 141 bloques de la ROM de Mortal Kombat, en los dos sentidos. Con el método 2 el resultado es correcto y la herramienta original lo descomprime bien, pero en algunos casos sale entre uno y tres bytes más largo que el suyo.
+Los dos métodos dan exactamente los mismos bytes que la herramienta original: comprobado con los 141 bloques de la ROM de Mortal Kombat, en los dos sentidos y con los dos métodos. Recomprimir esos bloques devuelve además los bytes que ya estaban en la ROM.
 
 Cuando unos datos no se pueden comprimir, la herramienta original dice que ha ido bien pero deja un fichero que ni ella misma es capaz de descomprimir. Aquí eso se detecta y se avisa en vez de escribir un bloque roto.
 
@@ -64,6 +66,9 @@ Sólo necesitas ejecutar: `mvn clean package`. En la carpeta `dist` tendrás el 
 
 ## Cambios recientes
 
+- Los WAV se leen y se escriben sin `javax.sound`, así que la compilación nativa ya no genera `jsound.dll` y el ejecutable adelgaza unos 2 MB.
+- El método 2 de RNC ya da los mismos bytes que la herramienta original (antes salía alguno más largo).
+- `dist` ya no se queda con el ejecutable de la compilación anterior.
 - La compresión RNC ProPack ya va dentro del programa: se acabó depender de `rnc_propack_x64.exe`.
 - Ya no se genera `extracted/log.txt`: los tamaños originales se sacan de la propia ROM al inyectar.
 - Se ha quitado la propiedad `proPackExe`.

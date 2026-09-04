@@ -72,7 +72,8 @@ public class BlockService {
             }
 
             Log.p(" Bloque comprimido {0} mayor que su hueco. ", name);
-            Integer pointer = TexticleService.findPointerAddress(address, fileData);
+            // se busca en la ROM original, para que lo ya inyectado no altere la búsqueda
+            Integer pointer = TexticleService.findPointerAddress(address, originalData);
             Integer newAddress = TexticleService.getNewAddress(compressedData.length);
             if (Objects.nonNull(pointer) && Objects.nonNull(newAddress)
                     && newAddress + compressedData.length <= fileData.length) {

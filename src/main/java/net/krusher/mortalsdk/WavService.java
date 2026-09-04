@@ -1,22 +1,26 @@
 package net.krusher.mortalsdk;
 
-import javax.sound.sampled.AudioFileFormat;
-import javax.sound.sampled.AudioFormat;
-import javax.sound.sampled.AudioInputStream;
-import javax.sound.sampled.AudioSystem;
-import javax.sound.sampled.UnsupportedAudioFileException;
-import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
 
 /**
  * Conversión entre el PCM de 8 bits con signo de la ROM y ficheros WAV.
  * <p>
  * WAV guarda el PCM de 8 bits sin signo, así que la conversión es un XOR con 0x80 en los dos sentidos.
+ * <p>
+ * El contenedor RIFF se lee y se escribe aquí a mano en vez de usar {@code javax.sound}: esa API vive en el
+ * módulo java.desktop y su implementación tira de código nativo, así que al compilar con GraalVM habría que
+ * repartir un {@code sound.dll} junto al ejecutable. Para leer y escribir PCM sin comprimir no hace falta.
  */
 public final class WavService {
 
     private static final int SIGN_FLIP = 0x80;
+    private static final int HEADER_SIZE = 44;
+    private static final int FORMAT_PCM = 1;
+    private static final int FORMAT_EXTENSIBLE = 0xFFFE;
+    private static final int FMT_CHUNK_SIZE = 16;
+    private static final int EXTENSIBLE_SIZE = 40;
 
     private WavService() {}
 
@@ -25,15 +29,30 @@ public final class WavService {
      */
     public record WavData(byte[] pcm, int sampleRate) {}
 
+    /** Escribe el PCM (8 bits con signo) como WAV mono de 8 bits sin signo. */
     public static void write(byte[] pcm, int sampleRate, File output) throws IOException {
-        byte[] samples = new byte[pcm.length];
+        byte[] wav = new byte[HEADER_SIZE + pcm.length];
+
+        putTag(wav, 0, "RIFF");
+        putInt(wav, 4, wav.length - 8);
+        putTag(wav, 8, "WAVE");
+
+        putTag(wav, 12, "fmt ");
+        putInt(wav, 16, FMT_CHUNK_SIZE);
+        putShort(wav, 20, FORMAT_PCM);
+        putShort(wav, 22, 1);              // mono
+        putInt(wav, 24, sampleRate);
+        putInt(wav, 28, sampleRate);       // bytes por segundo
+        putShort(wav, 32, 1);              // bytes por bloque
+        putShort(wav, 34, 8);              // bits por muestra
+
+        putTag(wav, 36, "data");
+        putInt(wav, 40, pcm.length);
         for (int i = 0; i < pcm.length; i++) {
-            samples[i] = (byte) ((pcm[i] & 0xFF) ^ SIGN_FLIP);
+            wav[HEADER_SIZE + i] = (byte) ((pcm[i] & 0xFF) ^ SIGN_FLIP);
         }
-        AudioFormat format = new AudioFormat(sampleRate, 8, 1, false, false);
-        try (AudioInputStream stream = new AudioInputStream(new ByteArrayInputStream(samples), format, samples.length)) {
-            AudioSystem.write(stream, AudioFileFormat.Type.WAVE, output);
-        }
+
+        Files.write(output.toPath(), wav);
     }
 
     /**
@@ -41,44 +60,94 @@ public final class WavService {
      * y cualquier frecuencia: el reproductor de la ROM la reproduce cambiando la velocidad de la entrada.
      */
     public static WavData read(File input) throws IOException {
-        try (AudioInputStream stream = AudioSystem.getAudioInputStream(input)) {
-            AudioFormat format = stream.getFormat();
-            int bits = format.getSampleSizeInBits();
-            int channels = format.getChannels();
-            AudioFormat.Encoding encoding = format.getEncoding();
-            if ((bits != 8 && bits != 16) || channels < 1 || channels > 2
-                    || (!AudioFormat.Encoding.PCM_SIGNED.equals(encoding) && !AudioFormat.Encoding.PCM_UNSIGNED.equals(encoding))) {
-                throw new IOException("Formato WAV no admitido en " + input.getName()
-                        + ": se necesita PCM de 8 o 16 bits, mono o estéreo");
+        byte[] wav = Files.readAllBytes(input.toPath());
+        if (wav.length < 12 || !isTag(wav, 0, "RIFF") || !isTag(wav, 8, "WAVE")) {
+            throw new IOException("No es un fichero WAV: " + input.getName());
+        }
+
+        int format = -1;
+        int channels = 0;
+        int sampleRate = 0;
+        int bits = 0;
+        int dataAt = -1;
+        int dataSize = 0;
+
+        int at = 12;
+        while (at + 8 <= wav.length) {
+            int size = getInt(wav, at + 4);
+            int body = at + 8;
+            if (size < 0 || body + size > wav.length) {
+                size = wav.length - body;
             }
-            byte[] raw = stream.readAllBytes();
-            int bytesPerSample = bits / 8;
-            int frames = raw.length / (bytesPerSample * channels);
-            byte[] pcm = new byte[frames];
-            for (int frame = 0; frame < frames; frame++) {
-                int sum = 0;
-                for (int channel = 0; channel < channels; channel++) {
-                    int at = (frame * channels + channel) * bytesPerSample;
-                    sum += bits == 8
-                            ? readEightBits(raw, at, encoding)
-                            : readSixteenBits(raw, at, format.isBigEndian());
+            if (isTag(wav, at, "fmt ") && size >= FMT_CHUNK_SIZE) {
+                format = getShort(wav, body);
+                channels = getShort(wav, body + 2);
+                sampleRate = getInt(wav, body + 4);
+                bits = getShort(wav, body + 14);
+                if (format == FORMAT_EXTENSIBLE && size >= EXTENSIBLE_SIZE) {
+                    format = getShort(wav, body + 24);
                 }
-                pcm[frame] = (byte) (sum / channels);
+            } else if (isTag(wav, at, "data")) {
+                dataAt = body;
+                dataSize = size;
             }
-            return new WavData(pcm, Math.round(format.getSampleRate()));
-        } catch (UnsupportedAudioFileException e) {
-            throw new IOException("WAV no compatible: " + input.getName(), e);
+            at = body + size + (size & 1);
+        }
+
+        if (dataAt < 0 || format < 0) {
+            throw new IOException("Al WAV " + input.getName() + " le falta la cabecera fmt o los datos");
+        }
+        if (format != FORMAT_PCM || (bits != 8 && bits != 16) || channels < 1 || channels > 2) {
+            throw new IOException("Formato WAV no admitido en " + input.getName()
+                    + ": se necesita PCM de 8 o 16 bits, mono o estéreo");
+        }
+
+        int bytesPerSample = bits / 8;
+        int frames = dataSize / (bytesPerSample * channels);
+        byte[] pcm = new byte[frames];
+        for (int frame = 0; frame < frames; frame++) {
+            int sum = 0;
+            for (int channel = 0; channel < channels; channel++) {
+                int sampleAt = dataAt + (frame * channels + channel) * bytesPerSample;
+                // de 16 bits nos quedamos con el byte alto, que ya es la muestra de 8 bits con signo
+                sum += bits == 8 ? (wav[sampleAt] & 0xFF) ^ SIGN_FLIP : wav[sampleAt + 1];
+            }
+            pcm[frame] = (byte) (sum / channels);
+        }
+        return new WavData(pcm, sampleRate);
+    }
+
+    private static void putTag(byte[] data, int at, String tag) {
+        for (int i = 0; i < tag.length(); i++) {
+            data[at + i] = (byte) tag.charAt(i);
         }
     }
 
-    private static int readEightBits(byte[] raw, int at, AudioFormat.Encoding encoding) {
-        return AudioFormat.Encoding.PCM_UNSIGNED.equals(encoding)
-                ? (byte) ((raw[at] & 0xFF) ^ SIGN_FLIP)
-                : raw[at];
+    private static boolean isTag(byte[] data, int at, String tag) {
+        for (int i = 0; i < tag.length(); i++) {
+            if (data[at + i] != (byte) tag.charAt(i)) {
+                return false;
+            }
+        }
+        return true;
     }
 
-    private static int readSixteenBits(byte[] raw, int at, boolean bigEndian) {
-        return bigEndian ? raw[at] : raw[at + 1];
+    private static void putShort(byte[] data, int at, int value) {
+        data[at] = (byte) value;
+        data[at + 1] = (byte) (value >>> 8);
+    }
+
+    private static void putInt(byte[] data, int at, int value) {
+        putShort(data, at, value & 0xFFFF);
+        putShort(data, at + 2, value >>> 16);
+    }
+
+    private static int getShort(byte[] data, int at) {
+        return (data[at] & 0xFF) | ((data[at + 1] & 0xFF) << 8);
+    }
+
+    private static int getInt(byte[] data, int at) {
+        return getShort(data, at) | (getShort(data, at + 2) << 16);
     }
 
 }

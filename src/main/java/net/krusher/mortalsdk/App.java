@@ -101,7 +101,7 @@ public class App {
         Log.pnl("Ejemplos: x \"rom a extraer.bin\" [\"configuracion\"]");
         Log.pnl("          i \"rom a inyectar.bin\" [\"configuracion\"]");
         Log.pnl("Modo: x = extraer, i = inyectar");
-        Log.pnl("Configuracion: Opcional, se puede dejar en blanco y se usará una por defecto.");
-        Log.pnl("Ejemplos de configuracion en el directorio \"configs\".");
+        Log.pnl("Configuración: Opcional, se puede dejar en blanco y se usará una por defecto.");
+        Log.pnl("Ejemplos de configuración en el directorio \"configs\".");
     }
 }

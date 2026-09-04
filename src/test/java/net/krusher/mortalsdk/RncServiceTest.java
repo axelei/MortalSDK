@@ -51,6 +51,17 @@ public class RncServiceTest {
         assertRoundTrip(compressibleData(0x20000, 99), RncService.METHOD_1);
     }
 
+    /** Datos muy repetitivos: las coincidencias llegan al tope de maxMatches y se usa el desempate. */
+    @Test
+    public void roundTripsVeryRepetitiveData() throws Exception {
+        byte[] data = new byte[8000];
+        for (int i = 0; i < data.length; i++) {
+            data[i] = (byte) ((i & 1) == 0 ? 0x00 : 0xE0);
+        }
+        assertRoundTrip(data, RncService.METHOD_1);
+        assertRoundTrip(data, RncService.METHOD_2);
+    }
+
     @Test
     public void findsSeveralBlocksInsideABiggerFile() throws Exception {
         byte[] first = compressibleData(4000, 1);

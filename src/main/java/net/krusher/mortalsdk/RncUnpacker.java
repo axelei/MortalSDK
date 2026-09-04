@@ -62,10 +62,15 @@ final class RncUnpacker {
         if (readBit() != 0 && encKey == 0) {
             throw new RncException("El bloque está cifrado y hace falta la clave");
         }
-        if (method == RncService.METHOD_1) {
-            unpackMethod1();
-        } else {
-            unpackMethod2();
+        try {
+            if (method == RncService.METHOD_1) {
+                unpackMethod1();
+            } else {
+                unpackMethod2();
+            }
+        } catch (RuntimeException e) {
+            // datos corruptos que aun así cuadraban con el CRC: no debe reventar el barrido de la ROM
+            throw new RncException("Los datos comprimidos no son válidos: " + e);
         }
         output.write(decoded, dictSize, window - dictSize);
         if (unpackedCrc != unpackedCrcReal) {
