@@ -14,6 +14,7 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -105,18 +106,60 @@ public class BlockService {
         Log.pnl();
     }
 
-    public static void injectUncompressedBlocks(File[] extractedFiles, byte[] fileData, String extension) throws IOException {
+    /**
+     * Inyecta los bloques sin comprimir de la carpeta "extracted".
+     * <p>
+     * No se inyectan los bloques borrados (los que ya no tienen fichero) ni los que no se han modificado
+     * respecto a la ROM original. Estos bloques no se reubican: si uno no cabe en su hueco se avisa y se
+     * deja como estaba, porque no tienen por qué ser direccionables por puntero.
+     */
+    public static void injectUncompressedBlocks(File[] extractedFiles, byte[] fileData, byte[] originalData,
+                                                String extension, Set<Range> ranges) throws IOException {
+        Map<Integer, Range> rangesByAddress = new HashMap<>();
+        for (Range range : ranges) {
+            rangesByAddress.put(range.getFrom(), range);
+        }
+        Set<Integer> found = new HashSet<>();
         for (File extractedFile : extractedFiles) {
-            if (!extractedFile.getName().startsWith(extension)) {
+            String name = extractedFile.getName();
+            if (!name.startsWith(extension + "_")) {
                 continue;
             }
-            Log.p(" " + extractedFile.getName());
-            String addressHex = extractedFile.getName().substring(extractedFile.getName().lastIndexOf('_') + 1, extractedFile.getName().lastIndexOf('.'));
-            int addressDecimal = Integer.parseInt(addressHex, 16);
-            byte[] uncompressedData = Files.readAllBytes(Paths.get(extractedFile.getAbsolutePath()));
-            System.arraycopy(uncompressedData, 0, fileData, addressDecimal, uncompressedData.length);
+            int address = parseAddress(name);
+            found.add(address);
+            byte[] blockData = Files.readAllBytes(extractedFile.toPath());
+            Range range = rangesByAddress.get(address);
+            int room = Objects.nonNull(range) ? range.size() : blockData.length;
+            if (isUnmodified(blockData, originalData, address, room)) {
+                continue;
+            }
+            if (blockData.length > room) {
+                Log.pnl();
+                Log.p("El bloque {0} ocupa {1} bytes, más que los {2} de su hueco, y no se puede reubicar. No se inyectará.",
+                        name, blockData.length, room);
+                continue;
+            }
+            Log.p(" " + name);
+            System.arraycopy(blockData, 0, fileData, address, blockData.length);
+            Arrays.fill(fileData, address + blockData.length, address + room, (byte) 0x00);
+        }
+        for (Range range : ranges) {
+            if (!found.contains(range.getFrom())) {
+                Log.pnl();
+                Log.p("Bloque {0} borrado, no se inyectará.", toHexStringPadded(range.getFrom()));
+            }
         }
     }
+
+    private static boolean isUnmodified(byte[] blockData, byte[] originalData, int address, int room) {
+        return blockData.length == room
+                && Arrays.equals(blockData, 0, blockData.length, originalData, address, address + blockData.length);
+    }
+
+    private static int parseAddress(String fileName) {
+        return Integer.parseInt(fileName.substring(fileName.lastIndexOf('_') + 1, fileName.lastIndexOf('.')), 16);
+    }
+
 
     public static void extractUncompressedBlock(Set<Range> ranges, String extension, byte[] fileData) throws IOException {
         for (Range range : ranges) {
@@ -131,7 +174,7 @@ public class BlockService {
         }
     }
 
-    private static String toHexStringPadded(int address) {
+    public static String toHexStringPadded(int address) {
         return StringUtils.leftPad(Integer.toHexString(address), 6, '0');
     }
 

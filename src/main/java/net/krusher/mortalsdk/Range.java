@@ -29,6 +29,10 @@ public class Range {
         this.to = to;
     }
 
+    public Integer size() {
+        return to - from + 1;
+    }
+
     public boolean isInRange(int i) {
         return i >= from && i <= to;
     }

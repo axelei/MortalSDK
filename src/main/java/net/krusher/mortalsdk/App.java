@@ -58,8 +58,9 @@ public class App {
             Log.pnl("Extrayendo bloques...");
             BlockService.extractCompressedBlocks(file);
         }
+        Log.pnl("Extrayendo samples PCM...");
+        SampleService.extract(fileData);
         Log.pnl("Extrayendo datos sin comprimir...");
-        BlockService.extractUncompressedBlock(config.sounds(), "pcm", fileData);
         BlockService.extractUncompressedBlock(config.bins(), "bin", fileData);
         Log.pnl("Extrayendo textos...");
         List<Texticle> texts = TexticleService.findTexticles(fileData);
@@ -72,6 +73,7 @@ public class App {
         Log.pnl("Modo: Inyectar");
         Log.pnl("Leyendo archivo: " + file);
         byte[] fileData = Files.readAllBytes(Paths.get(file));
+        byte[] originalData = fileData.clone();
         Log.pnl("Inyectando bloques...");
         File extractedDir = new File("extracted");
         File[] extractedFiles = extractedDir.listFiles();
@@ -82,9 +84,11 @@ public class App {
                 Log.p("Inyectando bloques comprimidos:");
                 BlockService.injectCompressedBlocks(extractedFiles, fileData);
             }
-            Log.p("Inyectando bloques sin comprimir: ");
-            BlockService.injectUncompressedBlocks(extractedFiles, fileData, "pcm");
-            BlockService.injectUncompressedBlocks(extractedFiles, fileData, "bin");
+            Log.p("Inyectando samples PCM:");
+            SampleService.inject(extractedFiles, fileData, originalData);
+            Log.pnl();
+            Log.p("Inyectando bloques sin comprimir:");
+            BlockService.injectUncompressedBlocks(extractedFiles, fileData, originalData, "bin", config.bins());
             Log.pnl();
         }
         Log.pnl("Inyectando textos...");

@@ -12,7 +12,6 @@ import java.util.Set;
 
 public record Config(int minChars,
                      Set<Range> textRanges,
-                     Set<Range> sounds,
                      Set<Range> bins,
                      Set<Range> spaceRanges,
                      String proPackExe) {
@@ -20,7 +19,7 @@ public record Config(int minChars,
     private static final int DEFAULT_MIN_CHARS = 5;
 
     public Config() {
-        this(DEFAULT_MIN_CHARS, Set.of(), Set.of(), Set.of(), Set.of(), null);
+        this(DEFAULT_MIN_CHARS, Set.of(), Set.of(), Set.of(), null);
     }
 
     public static Config getInstance(String fileName) throws IOException {
@@ -32,15 +31,13 @@ public record Config(int minChars,
         int minChars = Integer.parseInt(properties.getProperty("minChars", String.valueOf(DEFAULT_MIN_CHARS)));
         String textRangesStr = properties.getProperty("textRanges");
         Set<Range> textRanges = parseRanges(textRangesStr);
-        String soundsStr = properties.getProperty("sounds");
-        Set<Range> sounds = parseRanges(soundsStr);
         String binsStr = properties.getProperty("bins");
         Set<Range> bins = parseRanges(binsStr);
         String spaceRangesStr = properties.getProperty("spaceRanges");
         Set<Range> spaceRanges = parseRanges(spaceRangesStr);
         String proPackExe = properties.getProperty("proPackExe", null);
 
-        return new Config(minChars, textRanges, sounds, bins, spaceRanges, proPackExe);
+        return new Config(minChars, textRanges, bins, spaceRanges, proPackExe);
     }
 
     private static Set<Range> parseRanges(String string) {

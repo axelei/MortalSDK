@@ -61,12 +61,12 @@ public class TexticleService {
         if (value == null) {
             return null;
         }
-        // convert value to 3 byte array
+        // se convierte el valor a un array de tres bytes
         byte[] valueBytes = new byte[3];
         valueBytes[0] = (byte) ((value >> 16) & 0xFF);
         valueBytes[1] = (byte) ((value >> 8) & 0xFF);
         valueBytes[2] = (byte) (value & 0xFF);
-        // search for the value in the file data
+        // se busca el valor en los datos del fichero
         for (int i = 0; i < fileData.length - 2; i++) {
             if (fileData[i] == valueBytes[0] && fileData[i + 1] == valueBytes[1] && fileData[i + 2] == valueBytes[2]) {
                 return i;
@@ -219,15 +219,27 @@ public class TexticleService {
     }
 
     public static Integer getNewAddress(int size) {
+        return getNewAddress(size, 0);
+    }
+
+    /**
+     * Reserva espacio libre. Si bankSize no es cero, el bloque no cruzará ninguna frontera de ese tamaño,
+     * porque el reproductor de samples direcciona la ROM por ventanas de banco.
+     */
+    public static Integer getNewAddress(int size, int bankSize) {
         Optional<Range> range = App.config.spaceRanges().stream().findFirst();
-        // No more ranges
+        // No quedan rangos
         if (range.isEmpty()) {
             return null;
         }
-        // No more space, remove and try next
-        if (range.get().getFrom() > range.get().getTo()) {
+        // El bloque cruzaría un banco, se salta al principio del siguiente
+        if (bankSize > 0 && range.get().getFrom() % bankSize + size > bankSize) {
+            range.get().setFrom((range.get().getFrom() / bankSize + 1) * bankSize);
+        }
+        // No queda sitio en este rango, se descarta y se prueba con el siguiente
+        if (range.get().getFrom() + size - 1 > range.get().getTo()) {
             App.config.spaceRanges().remove(range.get());
-            return getNewAddress(size);
+            return getNewAddress(size, bankSize);
         }
 
         int newAddress = range.get().getFrom();
