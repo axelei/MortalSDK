@@ -13,6 +13,25 @@ En la carpeta `extracted` se generarán los bloques descomprimidos como PNG, en 
 
 En la carpeta `configs` hay un ejemplo de configuración que estoy usando para mi proyecto personal.
 
+### Textos
+
+Cada texto ocupa una línea del fichero `.txt`, con el formato `direccion#tamaño#texto#puntero`. La dirección y el puntero van en hexadecimal; el tamaño en decimal, que es el número que importa al traducir: los caracteres que caben.
+
+El puntero lleva delante de qué tipo es, porque no se rellenan igual:
+
+- `abs:01663b` es un puntero absoluto de tres bytes. Si el texto no cabe se mueve al espacio libre de `spaceRanges` y se reescribe el puntero.
+- `lea:005a00` es un `lea (d16,PC),aN` del 68000, que es como el código llega a los textos que tiene cerca. Ahí no se guarda la dirección sino la distancia, y son 16 bits con signo, así que el texto sólo se puede mover a menos de 32 KB del propio `lea`. Si el hueco libre queda más lejos se avisa y el texto se corta, en vez de escribir una distancia que no cabe.
+
+Al buscar el puntero de un texto se mira primero si hay un `lea` que apunte justo a él, y sólo si no lo hay se recurre al puntero absoluto: un valor de tres bytes puede aparecer por casualidad en cualquier sitio, un `lea` no.
+
+Hay textos sin puntero: muchos van seguidos dentro de un bloque y el código los recorre uno detrás de otro, así que sólo se apunta al primero. Esos se pueden alargar o acortar entre ellos mientras el bloque entero siga ocupando lo mismo.
+
+Con la propiedad `texts` se limita la extracción a una lista de direcciones, que es cómodo cuando ya se han descartado a mano los falsos positivos:
+
+```properties
+texts=000100#000113#00013e
+```
+
 ### Gráficos
 
 Los bloques comprimidos se dibujan como hojas de tiles de Mega Drive: 8x8 píxeles de 4 bits, dos píxeles por byte, 32 bytes por tile, 16 tiles por fila. El PNG sale indexado de 4 bits, así que al abrirlo se sigue trabajando con los 16 índices que guarda la ROM.
@@ -122,6 +141,9 @@ Sólo necesitas ejecutar: `mvn clean package`. En la carpeta `dist` tendrás el 
 - Los gráficos se extraen y se inyectan como PNG en vez de como volcados de tiles. Ya no se generan los `.bin`.
 - Los fondos que tienen mapa de tiles salen montados como pantalla de 320x224, y se pueden editar así.
 - Las parejas de mapa y gráficos se pueden indicar con la propiedad `scenes`, y el mapa puede ir sin comprimir.
+- En el fichero de textos las direcciones van en hexadecimal y el puntero dice si es absoluto o un `lea`.
+- Se reconocen los punteros `lea (d16,PC)`, y con ellos se reubican textos si el hueco queda a tiro.
+- La propiedad `texts` limita la extracción a las direcciones que se le indiquen.
 - Las paletas de los gráficos se buscan solas en la ROM; también se pueden indicar a mano.
 - La configuración trae las paletas de nueve de las once pantallas, sacadas del código que las carga.
 - Los WAV se leen y se escriben sin `javax.sound`, así que la compilación nativa ya no genera `jsound.dll` y el ejecutable adelgaza unos 2 MB.

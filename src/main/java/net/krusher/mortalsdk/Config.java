@@ -15,13 +15,15 @@ import java.util.Set;
 /**
  * @param palettes qué paleta de la ROM se usa para dibujar cada bloque de gráficos, por dirección
  * @param scenes   qué bloque de gráficos usa cada mapa de tiles, por dirección
+ * @param texts    si no está vacío, las únicas direcciones de texto que se extraen
  */
 public record Config(int minChars,
                      Set<Range> textRanges,
                      Set<Range> bins,
                      Set<Range> spaceRanges,
                      Map<Integer, Integer> palettes,
-                     Map<Integer, Integer> scenes) {
+                     Map<Integer, Integer> scenes,
+                     Set<Integer> texts) {
 
     private static final int DEFAULT_MIN_CHARS = 5;
 
@@ -29,7 +31,7 @@ public record Config(int minChars,
     public static final int NONE = -1;
 
     public Config() {
-        this(DEFAULT_MIN_CHARS, Set.of(), Set.of(), Set.of(), Map.of(), Map.of());
+        this(DEFAULT_MIN_CHARS, Set.of(), Set.of(), Set.of(), Map.of(), Map.of(), Set.of());
     }
 
     public static Config getInstance(String fileName) throws IOException {
@@ -47,7 +49,8 @@ public record Config(int minChars,
         Set<Range> spaceRanges = parseRanges(spaceRangesStr);
         Map<Integer, Integer> palettes = parsePairs(properties.getProperty("palettes"), "palettes");
         Map<Integer, Integer> scenes = parsePairs(properties.getProperty("scenes"), "scenes");
-        return new Config(minChars, textRanges, bins, spaceRanges, palettes, scenes);
+        Set<Integer> texts = parseAddresses(properties.getProperty("texts"));
+        return new Config(minChars, textRanges, bins, spaceRanges, palettes, scenes, texts);
     }
 
     /**
@@ -67,6 +70,20 @@ public record Config(int minChars,
             String value = pair.substring(comma + 1).trim();
             // un "-" a la derecha sirve para decir que ahí no hay nada, y así descartar un emparejado
             result.put(parseHex(pair.substring(0, comma)), value.equals("-") ? NONE : parseHex(value));
+        }
+        return result;
+    }
+
+    /** Lista de direcciones en hexadecimal separadas por "#". */
+    private static Set<Integer> parseAddresses(String string) {
+        if (StringUtils.isBlank(string)) {
+            return Set.of();
+        }
+        Set<Integer> result = new HashSet<>();
+        for (String address : string.split("#")) {
+            if (!address.isBlank()) {
+                result.add(parseHex(address));
+            }
         }
         return result;
     }
