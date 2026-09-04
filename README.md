@@ -148,6 +148,18 @@ Se admite cualquier WAV PCM de 8 o 16 bits, mono o estéreo, y a cualquier frecu
 
 Con los bloques de `bins` se sigue el mismo criterio: el que ya no tenga PNG en `extracted` y el que no haya cambiado se quedan como estaban. No se reubican ni cambian de tamaño, porque no tienen por qué ser direccionables por puntero.
 
+### Rutinas anuladas
+
+La propiedad `skipRoutines` es una lista de direcciones a las que se les pone un `rts` al inyectar, con lo que la rutina deja de hacer nada y quien la llame sigue como si tal cosa:
+
+```properties
+skipRoutines=0x19a70
+```
+
+En esta ROM sirve para quitar el logo de Sega. Lo dibuja la rutina de `0x19A70`, que sube a la VDP los 1568 bytes de tiles de `0x19C00` —el bloque `bin_019c00`— y hace su fundido; sólo se la llama desde el arranque, en `0x1273E`, y se reserva y devuelve ella misma la pila que usa, así que saltársela entera no deja nada a medias. Justo después, el arranque vuelve a programar la VDP entera por su cuenta.
+
+Con eso, y como el vector RESET apunta a la intro, lo primero que se ve al encender y al resetear es la intro, y de ahí se pasa directamente al juego.
+
 ### Parche IPS
 
 Al terminar la inyección se escribe también un `.ips` junto a la ROM, que es lo que se reparte: la ROM entera es casi toda del juego original, y el parche sólo lleva los bytes que ha puesto este programa. Se genera solo, sin configurar nada.
@@ -211,6 +223,7 @@ Sólo necesitas ejecutar: `mvn clean package`. En la carpeta `dist` tendrás el 
 
 ## Cambios recientes
 
+- La propiedad `skipRoutines` anula rutinas con un `rts`; con ella se quita el logo de Sega y la intro pasa a ser lo primero que se ve.
 - Los bloques sin comprimir de `bins` también se extraen y se inyectan como PNG, no en crudo.
 - Al inyectar se escribe también un parche `.ips` con lo que ha cambiado, que es lo que se reparte.
 - Los créditos y los demás bloques de textos encadenados se reubican enteros, no línea a línea.
