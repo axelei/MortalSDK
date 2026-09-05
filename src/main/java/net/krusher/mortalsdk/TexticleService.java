@@ -47,11 +47,12 @@ public class TexticleService {
         StringBuilder buffer = new StringBuilder();
         boolean inText = false;
         int length = 0;
-        for (int i = 0; i < fileData.length; i++) {
-            if (!inRange(i)) {
-                continue;
-            }
-            int extractedLength = isChar(i, fileData);
+        // se llega uno más allá del final para cerrar el texto que quedara a medias
+        for (int i = 0; i <= fileData.length; i++) {
+            // saltarse un byte corta el texto que se llevara: si no, se pegaría con el de después y la
+            // dirección que se apunta sería la de ninguno de los dos
+            int extractedLength = i < fileData.length && inRange(i) && !isInsideFixed(i)
+                    ? isChar(i, fileData) : 0;
             if (extractedLength > 0) {
                 inText = true;
                 if (Objects.isNull(App.tbl)) {
@@ -78,7 +79,47 @@ public class TexticleService {
                 inText = false;
             }
         }
+        texts.addAll(fixedTexts(fileData));
+        texts.sort(Comparator.comparingInt(Texticle::address));
         return texts;
+    }
+
+    /**
+     * Los campos de tamaño fijo, que salen enteros y con su tamaño exacto en vez de por lo que ocupe el texto
+     * que haya dentro. Son los nombres de la cabecera de Mega Drive y cosas así: el juego los lee siempre del
+     * mismo sitio y del mismo largo, así que ni se mueven ni se dejan partir en dos.
+     */
+    private static List<Texticle> fixedTexts(byte[] fileData) {
+        List<Texticle> texts = new ArrayList<>();
+        for (Range range : App.config.fixedTexts()) {
+            if (!wanted(range.getFrom()) || range.getTo() >= fileData.length) {
+                continue;
+            }
+            byte[] bytes = Arrays.copyOfRange(fileData, range.getFrom(), range.getTo() + 1);
+            texts.add(new Texticle(range.getFrom(), range.size(),
+                    new String(bytes, StandardCharsets.ISO_8859_1), null));
+        }
+        return texts;
+    }
+
+    /** Si esa dirección cae dentro de un campo de tamaño fijo. */
+    private static boolean isInsideFixed(int address) {
+        for (Range range : App.config.fixedTexts()) {
+            if (range.isInRange(address)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Si ahí empieza un campo de tamaño fijo. */
+    static boolean isFixed(int address) {
+        for (Range range : App.config.fixedTexts()) {
+            if (range.getFrom() == address) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -308,6 +349,13 @@ public class TexticleService {
         texticles.sort(Comparator.comparingInt(Texticle::address));
         Set<Integer> pointed = pointedAddresses(originalData);
         Set<Integer> written = new HashSet<>();
+        // los campos fijos se apuntan ya para que no se los lleve ninguna cadena, pero se escriben al final:
+        // así, si el fichero trae de antes un texto viejo que los pisaba, manda el campo
+        for (Texticle texticle : texticles) {
+            if (isFixed(texticle.address())) {
+                written.add(texticle.address());
+            }
+        }
         for (Texticle texticle : texticles) {
             if (written.contains(texticle.address())) {
                 // ya se ha escrito detrás de otro, como parte de su cadena
@@ -316,6 +364,11 @@ public class TexticleService {
             List<Texticle> chain = chainOf(texticle, texticles, originalData, pointed);
             chain.forEach(member -> written.add(member.address()));
             writeChain(chain, fileData, originalData);
+        }
+        for (Texticle texticle : texticles) {
+            if (isFixed(texticle.address())) {
+                writeFixed(texticle, fileData);
+            }
         }
     }
 
@@ -359,6 +412,23 @@ public class TexticleService {
                 | (originalData[at + 2] & 0xFF);
         return value == texticle.address() && at % 2 == 1 && originalData[at - 1] == 0
                 && Math.abs(at - texticle.address()) <= POINTER_REACH;
+    }
+
+    /**
+     * Escribe un campo de tamaño fijo: el texto tal cual en ASCII, cortado si se pasa y rellenado con
+     * espacios si se queda corto, que es como los rellena la cabecera de Mega Drive. Ni se mueve ni se le
+     * busca puntero: el juego lo lee siempre de la misma dirección.
+     */
+    private static void writeFixed(Texticle texticle, byte[] fileData) {
+        byte[] bytes = texticle.toRawAsciiBytes();
+        if (bytes.length > texticle.size()) {
+            Log.pnl("Alerta: \"{0}\" tiene {1} caracteres y en {2} sólo caben {3}. Se cortará.",
+                    texticle.text(), bytes.length, Integer.toHexString(texticle.address()), texticle.size());
+        }
+        byte[] field = new byte[texticle.size()];
+        Arrays.fill(field, Texticle.ASCII_SPACE);
+        System.arraycopy(bytes, 0, field, 0, Math.min(bytes.length, field.length));
+        System.arraycopy(field, 0, fileData, texticle.address(), field.length);
     }
 
     /**

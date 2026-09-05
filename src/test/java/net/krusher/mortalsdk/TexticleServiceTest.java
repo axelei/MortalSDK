@@ -3,6 +3,7 @@ package net.krusher.mortalsdk;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
@@ -18,6 +19,11 @@ public class TexticleServiceTest {
     @Before
     public void useDefaultConfig() {
         App.config = new Config();
+    }
+
+    private static void withFixed(Range... fixed) {
+        App.config = new Config(4, Set.of(), Set.of(), new java.util.HashSet<>(), Map.of(), Map.of(),
+                Set.of(), null, Set.of(), Set.of(), Set.of(), Set.of(fixed));
     }
 
     /** Escribe una cadena terminada en cero. */
@@ -130,7 +136,7 @@ public class TexticleServiceTest {
     @Test
     public void divertsALeaThroughATrampoline() {
         App.config = new Config(4, Set.of(), Set.of(), Set.of(), Map.of(), Map.of(), Set.of(), null,
-                Set.of(), Set.of(Range.of(0x1000, 0x1020)), Set.of());
+                Set.of(), Set.of(Range.of(0x1000, 0x1020)), Set.of(), Set.of());
         byte[] rom = new byte[0x400000];
         putLea(rom, 0x100, 0x800);
         rom[0x100] = 0x47;                 // lea (d16,PC),a3, para comprobar que se respeta el registro
@@ -206,6 +212,61 @@ public class TexticleServiceTest {
         assertEquals(0x201, checked.get(1).pointer().address());   // el absoluto de verdad tambien
         assertNull(checked.get(2).pointer());                      // la casualidad se tira
         assertNull(checked.get(3).pointer());                      // y el lea que no esta donde dice
+    }
+
+    /** Un campo de tamaño fijo sale entero y con su tamaño, no por lo que ocupe el texto que tenga. */
+    @Test
+    public void pullsOutAFixedFieldWholeAndWithItsOwnSize() {
+        withFixed(Range.of(0x120, 0x14F));
+        byte[] rom = new byte[0x2000];
+        java.util.Arrays.fill(rom, 0x120, 0x150, Texticle.ASCII_SPACE);
+        System.arraycopy("MORTAL KOMBAT".getBytes(StandardCharsets.ISO_8859_1), 0, rom, 0x120, 13);
+
+        Texticle campo = TexticleService.findTexticles(rom).stream()
+                .filter(t -> t.address() == 0x120).findFirst().orElseThrow();
+        assertEquals(48, campo.size());
+        assertEquals("MORTAL KOMBAT                                   ", campo.text());
+        assertNull("no se le busca puntero: el juego lo lee siempre de ahí", campo.pointer());
+    }
+
+    /** Saltarse los bytes de un campo fijo tiene que cortar el texto de al lado, no pegarse con él. */
+    @Test
+    public void doesNotWeldTogetherTheTextsOnEachSideOfAFixedField() {
+        withFixed(Range.of(0x120, 0x14F));
+        byte[] rom = new byte[0x2000];
+        System.arraycopy("ANTES".getBytes(StandardCharsets.ISO_8859_1), 0, rom, 0x118, 5);
+        java.util.Arrays.fill(rom, 0x120, 0x150, (byte) 'X');
+        System.arraycopy("DESPUES".getBytes(StandardCharsets.ISO_8859_1), 0, rom, 0x150, 7);
+
+        List<Texticle> texts = TexticleService.findTexticles(rom);
+        assertTrue("el de antes sale con su dirección",
+                texts.stream().anyMatch(t -> t.address() == 0x118 && t.text().equals("ANTES")));
+        assertTrue("el de después también",
+                texts.stream().anyMatch(t -> t.address() == 0x150 && t.text().equals("DESPUES")));
+    }
+
+    /** Al inyectar se rellena con espacios lo que sobre y se corta lo que se pase, sin salirse del campo. */
+    @Test
+    public void writesAFixedFieldPaddedAndNeverPastItsEnd() throws Exception {
+        withFixed(Range.of(0x120, 0x12F));
+        byte[] rom = new byte[0x2000];
+        java.util.Arrays.fill(rom, 0x130, 0x140, (byte) 0x7E);      // lo de detrás no se toca
+
+        File file = File.createTempFile("textos", "");
+        file.deleteOnExit();
+        String base = file.getAbsolutePath();
+        java.nio.file.Files.writeString(java.nio.file.Path.of(base + ".txt"),
+                "000120#0016#CORTO" + System.lineSeparator());
+        TexticleService.insertTexticles(base, rom, rom.clone());
+        assertEquals("CORTO           ",
+                new String(rom, 0x120, 16, StandardCharsets.ISO_8859_1));
+
+        java.nio.file.Files.writeString(java.nio.file.Path.of(base + ".txt"),
+                "000120#0016#ESTE NOMBRE NO CABE NI DE BROMA" + System.lineSeparator());
+        TexticleService.insertTexticles(base, rom, rom.clone());
+        assertEquals("ESTE NOMBRE NO C",
+                new String(rom, 0x120, 16, StandardCharsets.ISO_8859_1));
+        assertEquals("no se sale del campo", 0x7E, rom[0x130]);
     }
 
     @Test

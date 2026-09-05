@@ -55,6 +55,23 @@ codeSpace=0x1c0,0x1ef#0xd09a,0xd0d3
 
 En esta ROM `0x1C0` son los bytes reservados de la cabecera de Mega Drive y `0xD09A` es relleno entre dos rutinas. Si no hay hueco a tiro se avisa y el texto se corta, en vez de escribir un salto que no llega.
 
+#### Campos de tamaño fijo
+
+Hay sitios donde el juego lee siempre la misma dirección y el mismo número de bytes, y no un texto que acabe donde acabe. Los nombres de la cabecera de Mega Drive son así: el nacional está en `0x120` y el internacional en `0x150`, y son 48 bytes cada uno, rellenos de espacios. Se indican con `fixedTexts`:
+
+```properties
+fixedTexts=0x120,0x14f#0x150,0x17f
+```
+
+Esos campos salen al fichero de textos enteros y con su tamaño exacto, no con lo que ocupe el texto que lleven dentro, y sin puntero, porque no lo necesitan. Al inyectar se escriben donde estaban, rellenando con espacios lo que sobre y cortando lo que se pase, y no se mueven ni se encadenan con lo que tengan al lado. Así se le cambia el nombre a la ROM —el del juego y el de exportación— desde el fichero de textos:
+
+```
+000120#0048#KOMBATE MORTAS ARCADA EDITION
+000150#0048#KOMBATE MORTAS ARCADA EDITION
+```
+
+De paso, el rastreo de textos corta al saltarse un byte que no le toca. Antes, un texto a cada lado de una zona saltada salía pegado al otro y con una dirección que no era la de ninguno de los dos.
+
 Con la propiedad `texts` se limita la extracción a una lista de direcciones, que es cómodo cuando ya se han descartado a mano los falsos positivos:
 
 ```properties
@@ -244,6 +261,8 @@ Sólo necesitas ejecutar: `mvn clean package`. En la carpeta `dist` tendrás el 
 
 ## Cambios recientes
 
+- Con la propiedad `fixedTexts` se sacan al fichero de textos los campos de tamaño fijo, como los nombres de la cabecera de Mega Drive, y así se le puede cambiar el nombre a la ROM.
+- Al rastrear textos, saltarse un byte corta el texto: antes se pegaban los de un lado y otro de una zona saltada.
 - El hueco que deja algo que se mueve vuelve al espacio libre, y lo aprovecha lo siguiente que no quepa.
 - El espacio libre se reparte siempre por el hueco más bajo donde quepa, y no por el orden en que estén escritos los rangos.
 - Los avisos de los samples dicen el nombre del fichero, no el número del sample.

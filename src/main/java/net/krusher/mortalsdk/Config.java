@@ -22,6 +22,8 @@ import java.util.Set;
  *                   {@code lea (d16,PC)} cuyo texto se ha ido a más de 32 KB. Tienen que caer cerca del
  *                   propio lea, así que conviene dar varios repartidos por la zona de código.
  * @param skipRoutines rutinas a las que se les pone un rts para que no hagan nada
+ * @param fixedTexts campos de tamaño fijo que salen al fichero de textos tal cual, como los nombres de la
+ *                   cabecera de Mega Drive
  */
 public record Config(int minChars,
                      Set<Range> textRanges,
@@ -33,7 +35,8 @@ public record Config(int minChars,
                      String intro,
                      Set<Range> introSpace,
                      Set<Range> codeSpace,
-                     Set<Integer> skipRoutines) {
+                     Set<Integer> skipRoutines,
+                     Set<Range> fixedTexts) {
 
     private static final int DEFAULT_MIN_CHARS = 5;
 
@@ -42,7 +45,7 @@ public record Config(int minChars,
 
     public Config() {
         this(DEFAULT_MIN_CHARS, Set.of(), Set.of(), new HashSet<>(), Map.of(), Map.of(), Set.of(), null,
-                Set.of(), Set.of(), Set.of());
+                Set.of(), Set.of(), Set.of(), Set.of());
     }
 
     public static Config getInstance(String fileName) throws IOException {
@@ -65,8 +68,9 @@ public record Config(int minChars,
         Set<Range> introSpace = parseRanges(properties.getProperty("introSpace"));
         Set<Range> codeSpace = parseRanges(properties.getProperty("codeSpace"));
         Set<Integer> skipRoutines = parseAddresses(properties.getProperty("skipRoutines"));
+        Set<Range> fixedTexts = parseRanges(properties.getProperty("fixedTexts"));
         return new Config(minChars, textRanges, bins, spaceRanges, palettes, scenes, texts, intro, introSpace,
-                codeSpace, skipRoutines);
+                codeSpace, skipRoutines, fixedTexts);
     }
 
     /**
