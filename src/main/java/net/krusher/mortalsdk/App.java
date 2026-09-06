@@ -1,6 +1,7 @@
 package net.krusher.mortalsdk;
 
 import com.google.common.collect.BiMap;
+import org.apache.commons.lang3.StringUtils;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -102,7 +103,24 @@ public class App {
         Log.pnl("Salida escrita en: " + outputFile.getAbsolutePath());
         // lo que se reparte no es la ROM, que es casi toda del juego, sino el parche con lo que hemos puesto
         Log.pnl("Escribiendo el parche...");
-        IpsService.write(originalData, fileData, file);
+        IpsService.write(ipsBase(originalData), fileData, file);
+    }
+
+    /**
+     * La ROM contra la que se calcula el parche: la de {@code ipsBase} si la configuración la pide, y si no
+     * la de entrada. Sirve para repartir un parche que se aplique sobre otra ROM, como la del juego original
+     * en vez de la del hack del que se parte.
+     */
+    private static byte[] ipsBase(byte[] originalData) throws IOException {
+        if (StringUtils.isBlank(config.ipsBase())) {
+            return originalData;
+        }
+        File baseFile = new File(config.ipsBase());
+        if (!baseFile.isFile()) {
+            throw new IllegalStateException("La ROM de ipsBase no existe: " + baseFile.getAbsolutePath());
+        }
+        Log.pnl("El parche se calcula contra: " + baseFile.getAbsolutePath());
+        return Files.readAllBytes(baseFile.toPath());
     }
 
     public static void displayHelp() {

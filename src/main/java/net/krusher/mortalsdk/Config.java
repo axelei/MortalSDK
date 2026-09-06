@@ -25,6 +25,9 @@ import java.util.Set;
  * @param fixedTexts campos de tamaño fijo que salen al fichero de textos tal cual, como los nombres de la
  *                   cabecera de Mega Drive
  * @param romName  el nombre que se le pone a la ROM en la cabecera, si se quiere
+ * @param ipsBase  la ROM contra la que se calcula el parche IPS. Sin esto se usa la de entrada, que es lo
+ *                 normal; se pone cuando lo que se reparte tiene que aplicarse sobre otra ROM distinta,
+ *                 como la del juego original en vez de la del hack del que se parte.
  */
 public record Config(int minChars,
                      Set<Range> textRanges,
@@ -38,7 +41,8 @@ public record Config(int minChars,
                      Set<Range> codeSpace,
                      Set<Integer> skipRoutines,
                      Set<Range> fixedTexts,
-                     String romName) {
+                     String romName,
+                     String ipsBase) {
 
     private static final int DEFAULT_MIN_CHARS = 5;
 
@@ -47,7 +51,7 @@ public record Config(int minChars,
 
     public Config() {
         this(DEFAULT_MIN_CHARS, Set.of(), Set.of(), new HashSet<>(), Map.of(), Map.of(), Set.of(), null,
-                Set.of(), Set.of(), Set.of(), Set.of(), null);
+                Set.of(), Set.of(), Set.of(), Set.of(), null, null);
     }
 
     public static Config getInstance(String fileName) throws IOException {
@@ -72,8 +76,9 @@ public record Config(int minChars,
         Set<Integer> skipRoutines = parseAddresses(properties.getProperty("skipRoutines"));
         Set<Range> fixedTexts = parseRanges(properties.getProperty("fixedTexts"));
         String romName = properties.getProperty("romName");
+        String ipsBase = properties.getProperty("ipsBase");
         return new Config(minChars, textRanges, bins, spaceRanges, palettes, scenes, texts, intro, introSpace,
-                codeSpace, skipRoutines, fixedTexts, romName);
+                codeSpace, skipRoutines, fixedTexts, romName, ipsBase);
     }
 
     /**

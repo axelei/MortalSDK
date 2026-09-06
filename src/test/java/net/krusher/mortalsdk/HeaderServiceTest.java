@@ -19,7 +19,7 @@ public class HeaderServiceTest {
 
     private static void withName(String name) {
         App.config = new Config(4, Set.of(), Set.of(), Set.of(), Map.of(), Map.of(), Set.of(), null,
-                Set.of(), Set.of(), Set.of(), Set.of(), name);
+                Set.of(), Set.of(), Set.of(), Set.of(), name, null);
     }
 
     private static String nameAt(byte[] rom, int at) {

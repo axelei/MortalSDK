@@ -19,7 +19,7 @@ public class CodeServiceTest {
 
     private static void configure(Integer... routines) {
         App.config = new Config(4, Set.of(), Set.of(), Set.of(), Map.of(), Map.of(), Set.of(), null,
-                Set.of(), Set.of(), Set.of(routines), Set.of(), null);
+                Set.of(), Set.of(), Set.of(routines), Set.of(), null, null);
     }
 
     @Test
