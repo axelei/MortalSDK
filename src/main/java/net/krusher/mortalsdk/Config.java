@@ -24,6 +24,8 @@ import java.util.Set;
  * @param skipRoutines rutinas a las que se les pone un rts para que no hagan nada
  * @param fixedTexts campos de tamaño fijo que salen al fichero de textos tal cual, como los nombres de la
  *                   cabecera de Mega Drive
+ * @param codePatches parches sueltos de bytes sobre el código, por dirección. Para cambios finos que no
+ *                    tienen otra propiedad, como anular una condición que sobra
  * @param romName  el nombre que se le pone a la ROM en la cabecera, si se quiere
  * @param ipsBase  la ROM contra la que se calcula el parche IPS. Sin esto se usa la de entrada, que es lo
  *                 normal; se pone cuando lo que se reparte tiene que aplicarse sobre otra ROM distinta,
@@ -41,6 +43,7 @@ public record Config(int minChars,
                      Set<Range> codeSpace,
                      Set<Integer> skipRoutines,
                      Set<Range> fixedTexts,
+                     Map<Integer, byte[]> codePatches,
                      String romName,
                      String ipsBase) {
 
@@ -51,7 +54,7 @@ public record Config(int minChars,
 
     public Config() {
         this(DEFAULT_MIN_CHARS, Set.of(), Set.of(), new HashSet<>(), Map.of(), Map.of(), Set.of(), null,
-                Set.of(), Set.of(), Set.of(), Set.of(), null, null);
+                Set.of(), Set.of(), Set.of(), Set.of(), Map.of(), null, null);
     }
 
     public static Config getInstance(String fileName) throws IOException {
@@ -75,10 +78,11 @@ public record Config(int minChars,
         Set<Range> codeSpace = parseRanges(properties.getProperty("codeSpace"));
         Set<Integer> skipRoutines = parseAddresses(properties.getProperty("skipRoutines"));
         Set<Range> fixedTexts = parseRanges(properties.getProperty("fixedTexts"));
+        Map<Integer, byte[]> codePatches = parsePatches(properties.getProperty("codePatches"));
         String romName = properties.getProperty("romName");
         String ipsBase = properties.getProperty("ipsBase");
         return new Config(minChars, textRanges, bins, spaceRanges, palettes, scenes, texts, intro, introSpace,
-                codeSpace, skipRoutines, fixedTexts, romName, ipsBase);
+                codeSpace, skipRoutines, fixedTexts, codePatches, romName, ipsBase);
     }
 
     /**
@@ -98,6 +102,33 @@ public record Config(int minChars,
             String value = pair.substring(comma + 1).trim();
             // un "-" a la derecha sirve para decir que ahí no hay nada, y así descartar un emparejado
             result.put(parseHex(pair.substring(0, comma)), value.equals("-") ? NONE : parseHex(value));
+        }
+        return result;
+    }
+
+    /**
+     * Lee una propiedad con el formato {@code direccion:bytes#direccion:bytes}, todo en hexadecimal: la
+     * dirección admite el prefijo 0x y los bytes van seguidos y en pares.
+     */
+    private static Map<Integer, byte[]> parsePatches(String string) {
+        if (StringUtils.isBlank(string)) {
+            return Map.of();
+        }
+        Map<Integer, byte[]> result = new HashMap<>();
+        for (String patch : string.split("#")) {
+            int colon = patch.indexOf(':');
+            if (colon < 0) {
+                throw new IllegalArgumentException("La propiedad codePatches tiene un parche mal escrito: " + patch);
+            }
+            String bytes = patch.substring(colon + 1).trim();
+            if (bytes.isEmpty() || bytes.length() % 2 != 0) {
+                throw new IllegalArgumentException("Los bytes del parche " + patch + " van en pares.");
+            }
+            byte[] data = new byte[bytes.length() / 2];
+            for (int i = 0; i < data.length; i++) {
+                data[i] = (byte) Integer.parseInt(bytes.substring(i * 2, i * 2 + 2), 16);
+            }
+            result.put(parseHex(patch.substring(0, colon)), data);
         }
         return result;
     }

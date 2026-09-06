@@ -1,5 +1,7 @@
 package net.krusher.mortalsdk;
 
+import java.util.Map;
+
 import org.junit.Before;
 import org.junit.Test;
 
@@ -125,7 +127,7 @@ public class IntroServiceTest {
         App.config = new Config(4, java.util.Set.of(), java.util.Set.of(), java.util.Set.of(),
                 java.util.Map.of(), java.util.Map.of(), java.util.Set.of(),
                 "no-existe-esta-intro.md", java.util.Set.of(Range.of(0x1000, 0x2000)), java.util.Set.of(),
-                java.util.Set.of(), java.util.Set.of(), null, null);
+                java.util.Set.of(), java.util.Set.of(), Map.of(), null, null);
         try {
             IntroService.inject(new byte[0x400000], new byte[0x400000]);
             fail("tendría que haber fallado");

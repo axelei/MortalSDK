@@ -19,7 +19,35 @@ public class CodeServiceTest {
 
     private static void configure(Integer... routines) {
         App.config = new Config(4, Set.of(), Set.of(), Set.of(), Map.of(), Map.of(), Set.of(), null,
-                Set.of(), Set.of(), Set.of(routines), Set.of(), null, null);
+                Set.of(), Set.of(), Set.of(routines), Set.of(), Map.of(), null, null);
+    }
+
+    private static void withPatches(Map<Integer, byte[]> patches) {
+        App.config = new Config(4, Set.of(), Set.of(), Set.of(), Map.of(), Map.of(), Set.of(), null,
+                Set.of(), Set.of(), Set.of(), Set.of(), patches, null, null);
+    }
+
+    @Test
+    public void writesThePatchBytesWhereTheyGo() {
+        withPatches(Map.of(0x100, new byte[]{0x4E, 0x71, 0x4E, 0x71}));
+        byte[] rom = new byte[0x400];
+        rom[0x100] = 0x4A;
+        rom[0x104] = 0x66;
+        CodeService.applyPatches(rom);
+        assertEquals(0x4E71, TexticleService.readWord(rom, 0x100));
+        assertEquals(0x4E71, TexticleService.readWord(rom, 0x102));
+        assertEquals("no toca nada más allá del parche", 0x66, rom[0x104]);
+    }
+
+    @Test
+    public void refusesAPatchThatFallsOutsideTheRom() {
+        withPatches(Map.of(0x3FE, new byte[]{1, 2, 3, 4}));
+        try {
+            CodeService.applyPatches(new byte[0x400]);
+            fail("tenía que quejarse");
+        } catch (IllegalArgumentException e) {
+            assertTrue(e.getMessage(), e.getMessage().contains("se sale de la ROM"));
+        }
     }
 
     @Test
