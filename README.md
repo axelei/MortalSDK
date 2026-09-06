@@ -70,6 +70,16 @@ Esos campos salen al fichero de textos enteros y con su tamaño exacto, no con l
 000150#0048#KOMBATE MORTAS ARCADA EDITION
 ```
 
+#### El nombre de la ROM
+
+Con `romName` se le pone nombre a la ROM en los dos campos de la cabecera de una vez, sin depender del fichero de textos:
+
+```properties
+romName=KOMBATE MORTAS ARCADA EDITION
+```
+
+Se escribe lo último de la inyección, así que manda sobre lo que hayan puesto ahí los textos —que pueden venir de un fichero de antes, con la cabecera partida de otra manera— y sobre `fixedTexts` si se usan los dos. Caben 48 caracteres; lo que sobre se rellena con espacios y lo que se pase se corta, avisando. Sin la propiedad no se toca la cabecera.
+
 De paso, el rastreo de textos corta al saltarse un byte que no le toca. Antes, un texto a cada lado de una zona saltada salía pegado al otro y con una dirección que no era la de ninguno de los dos.
 
 Con la propiedad `texts` se limita la extracción a una lista de direcciones, que es cómodo cuando ya se han descartado a mano los falsos positivos:
@@ -261,6 +271,7 @@ Sólo necesitas ejecutar: `mvn clean package`. En la carpeta `dist` tendrás el 
 
 ## Cambios recientes
 
+- La propiedad `romName` le pone nombre a la ROM en los dos campos de la cabecera, lo último de la inyección.
 - Con la propiedad `fixedTexts` se sacan al fichero de textos los campos de tamaño fijo, como los nombres de la cabecera de Mega Drive, y así se le puede cambiar el nombre a la ROM.
 - Al rastrear textos, saltarse un byte corta el texto: antes se pegaban los de un lado y otro de una zona saltada.
 - El hueco que deja algo que se mueve vuelve al espacio libre, y lo aprovecha lo siguiente que no quepa.

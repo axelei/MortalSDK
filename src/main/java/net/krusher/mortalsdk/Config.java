@@ -24,6 +24,7 @@ import java.util.Set;
  * @param skipRoutines rutinas a las que se les pone un rts para que no hagan nada
  * @param fixedTexts campos de tamaño fijo que salen al fichero de textos tal cual, como los nombres de la
  *                   cabecera de Mega Drive
+ * @param romName  el nombre que se le pone a la ROM en la cabecera, si se quiere
  */
 public record Config(int minChars,
                      Set<Range> textRanges,
@@ -36,7 +37,8 @@ public record Config(int minChars,
                      Set<Range> introSpace,
                      Set<Range> codeSpace,
                      Set<Integer> skipRoutines,
-                     Set<Range> fixedTexts) {
+                     Set<Range> fixedTexts,
+                     String romName) {
 
     private static final int DEFAULT_MIN_CHARS = 5;
 
@@ -45,7 +47,7 @@ public record Config(int minChars,
 
     public Config() {
         this(DEFAULT_MIN_CHARS, Set.of(), Set.of(), new HashSet<>(), Map.of(), Map.of(), Set.of(), null,
-                Set.of(), Set.of(), Set.of(), Set.of());
+                Set.of(), Set.of(), Set.of(), Set.of(), null);
     }
 
     public static Config getInstance(String fileName) throws IOException {
@@ -69,8 +71,9 @@ public record Config(int minChars,
         Set<Range> codeSpace = parseRanges(properties.getProperty("codeSpace"));
         Set<Integer> skipRoutines = parseAddresses(properties.getProperty("skipRoutines"));
         Set<Range> fixedTexts = parseRanges(properties.getProperty("fixedTexts"));
+        String romName = properties.getProperty("romName");
         return new Config(minChars, textRanges, bins, spaceRanges, palettes, scenes, texts, intro, introSpace,
-                codeSpace, skipRoutines, fixedTexts);
+                codeSpace, skipRoutines, fixedTexts, romName);
     }
 
     /**

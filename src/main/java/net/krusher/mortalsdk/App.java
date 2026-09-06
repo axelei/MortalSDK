@@ -92,6 +92,8 @@ public class App {
         // la intro va la última, sobre la ROM ya reescrita, y antes del checksum
         Log.pnl("Inyectando intro...");
         IntroService.inject(fileData, originalData);
+        // el nombre va el último: así manda sobre lo que hayan escrito los textos en la cabecera
+        HeaderService.writeName(fileData);
         Log.pnl("Arreglando checksum...");
         Checksum.fixChecksum(fileData);
         Log.pnl("Escribiendo salida...");

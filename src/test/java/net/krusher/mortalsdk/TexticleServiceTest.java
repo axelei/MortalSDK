@@ -23,7 +23,7 @@ public class TexticleServiceTest {
 
     private static void withFixed(Range... fixed) {
         App.config = new Config(4, Set.of(), Set.of(), new java.util.HashSet<>(), Map.of(), Map.of(),
-                Set.of(), null, Set.of(), Set.of(), Set.of(), Set.of(fixed));
+                Set.of(), null, Set.of(), Set.of(), Set.of(), Set.of(fixed), null);
     }
 
     /** Escribe una cadena terminada en cero. */
@@ -136,7 +136,7 @@ public class TexticleServiceTest {
     @Test
     public void divertsALeaThroughATrampoline() {
         App.config = new Config(4, Set.of(), Set.of(), Set.of(), Map.of(), Map.of(), Set.of(), null,
-                Set.of(), Set.of(Range.of(0x1000, 0x1020)), Set.of(), Set.of());
+                Set.of(), Set.of(Range.of(0x1000, 0x1020)), Set.of(), Set.of(), null);
         byte[] rom = new byte[0x400000];
         putLea(rom, 0x100, 0x800);
         rom[0x100] = 0x47;                 // lea (d16,PC),a3, para comprobar que se respeta el registro

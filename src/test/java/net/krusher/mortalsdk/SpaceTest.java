@@ -20,7 +20,7 @@ public class SpaceTest {
 
     private static void withSpace(Range... ranges) {
         App.config = new Config(4, Set.of(), Set.of(), new HashSet<>(Set.of(ranges)), Map.of(), Map.of(),
-                Set.of(), null, Set.of(), Set.of(), Set.of(), Set.of());
+                Set.of(), null, Set.of(), Set.of(), Set.of(), Set.of(), null);
     }
 
     /** Sin rangos no hay sitio, y pedirlo no revienta. */
