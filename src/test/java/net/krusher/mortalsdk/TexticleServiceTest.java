@@ -295,4 +295,33 @@ public class TexticleServiceTest {
         assertNull(Texticle.Pointer.parse("  "));
     }
 
+
+    @Test
+    public void aChainStopsAtATextThatIsPointedTo() {
+        byte[] rom = new byte[0x400];
+        System.arraycopy("UNO".getBytes(StandardCharsets.ISO_8859_1), 0, rom, 0x100, 3);
+        rom[0x103] = 0;
+        System.arraycopy("DOS".getBytes(StandardCharsets.ISO_8859_1), 0, rom, 0x104, 3);
+        rom[0x107] = 0;
+        Texticle uno = new Texticle(0x100, 3, "UNO", null);
+        Texticle dos = new Texticle(0x104, 3, "DOS", null);
+        List<Texticle> ambos = List.of(uno, dos);
+
+        // sin puntero propio, el segundo va detrás del primero y se movería con él
+        assertEquals(2, TexticleService.chainOf(uno, ambos, rom, Set.of()).size());
+
+        // con puntero propio, la cadena se corta: el juego llega a él por su cuenta
+        assertEquals(1, TexticleService.chainOf(uno, ambos, rom, Set.of(0x104)).size());
+    }
+
+    @Test
+    public void theOperandOfAMoveLCountsAsAPointerHoweverFarItIs() {
+        byte[] rom = new byte[0x40000];
+        // move.l #$0002FF00,(a3)+ en 0x100, apuntando lejísimos del texto
+        rom[0x100] = 0x26; rom[0x101] = (byte) 0xFC;
+        rom[0x102] = 0; rom[0x103] = 0x02; rom[0x104] = (byte) 0xFF; rom[0x105] = 0x00;
+        Set<Integer> pointed = TexticleService.pointedAddresses(rom);
+        assertTrue("el inmediato de un move.l es un puntero aunque esté lejos", pointed.contains(0x02FF00));
+    }
+
 }

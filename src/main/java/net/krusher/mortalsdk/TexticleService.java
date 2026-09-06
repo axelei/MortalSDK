@@ -492,8 +492,20 @@ public class TexticleService {
                 pointed.add(value);
             }
         }
+        // El operando de un "move.l #dirección, lo que sea" es un puntero se ponga donde se ponga: no vale
+        // pedirle que esté cerca del texto, que el juego puede encolar un rótulo desde la otra punta de la
+        // ROM. Y no se cuela cualquier cosa, porque tiene que ser justo el inmediato de esa instrucción.
+        for (int at = 0; at + 6 <= data.length; at += 2) {
+            if ((readWord(data, at) & 0xF03F) != MOVE_L_IMMEDIATE || data[at + 2] != 0) {
+                continue;
+            }
+            pointed.add(((data[at + 3] & 0xFF) << 16) | ((data[at + 4] & 0xFF) << 8) | (data[at + 5] & 0xFF));
+        }
         return pointed;
     }
+
+    /** Un {@code move.l #inmediato, destino}: 0010 rrr mmm 111 100, o sea opcode &amp; 0xF03F == 0x203C. */
+    static final int MOVE_L_IMMEDIATE = 0x203C;
 
     /** Cuántos bytes de texto seguidos hay a partir de esta dirección. */
     private static int lengthAt(int address, byte[] data) {
