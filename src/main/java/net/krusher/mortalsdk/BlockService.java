@@ -187,7 +187,8 @@ public class BlockService {
             return;
         }
 
-        Log.p(" Bloque comprimido {0} mayor que su hueco. ", name);
+        Log.p(" El bloque {0} ocupa {1} bytes, más que los {2} de su hueco. ",
+                name, compressedData.length, originalSize);
         // se busca en la ROM original, para que lo ya inyectado no altere la búsqueda
         Integer pointer = TexticleService.findPointerAddress(address, originalData);
         Integer newAddress = TexticleService.getNewAddress(compressedData.length);
@@ -200,8 +201,11 @@ public class BlockService {
             if (canFree) {
                 TexticleService.freeSpace(address, originalSize);
             }
+        } else if (Objects.isNull(pointer)) {
+            // sin un puntero que actualizar no hay forma de decirle al juego dónde ha quedado el bloque
+            Log.pnl("No se inyectará: no hay ningún puntero a {0} que actualizar.", toHexStringPadded(address));
         } else {
-            Log.pnl("No se inyectará.");
+            Log.pnl("No se inyectará: no queda ningún hueco libre de {0} bytes.", compressedData.length);
         }
     }
 

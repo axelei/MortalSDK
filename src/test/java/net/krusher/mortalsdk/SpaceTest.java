@@ -25,6 +25,44 @@ public class SpaceTest {
 
     /** Sin rangos no hay sitio, y pedirlo no revienta. */
     @Test
+    public void everyAddressIsEvenEvenAfterAnOddSizedBlock() {
+        withSpace(Range.of(0x1000, 0x2000));
+        // un tamaño par dejaba el siguiente hueco en impar por el "+ 1" que separa las reservas
+        assertEquals(0x1000, TexticleService.getNewAddress(0x10).intValue());
+        int second = TexticleService.getNewAddress(0x10).intValue();
+        assertEquals("la segunda reserva tiene que caer en par y no en 0x1011", 0x1012, second);
+        // y un tamaño impar tampoco puede dejarla impar
+        int third = TexticleService.getNewAddress(0x11).intValue();
+        assertEquals(0, third % 2);
+        assertEquals(0, TexticleService.getNewAddress(8).intValue() % 2);
+    }
+
+    @Test
+    public void takesAnOddHoleFromItsFirstEvenByte() {
+        withSpace(Range.of(0x1001, 0x2000));
+        assertEquals(0x1002, TexticleService.getNewAddress(8).intValue());
+    }
+
+    @Test
+    public void neverHandsOutSpaceThatTheSramWillCover() {
+        try {
+            TexticleService.setSramWindow(Range.of(0x200000, 0x20FFFF));
+            withSpace(Range.of(0x206000, 0x206FFF), Range.of(0x300000, 0x300FFF));
+            // el primer hueco cae entero bajo la SRAM, así que se salta
+            assertEquals(0x300000, TexticleService.getNewAddress(0x100).intValue());
+        } finally {
+            TexticleService.setSramWindow(null);
+        }
+    }
+
+    @Test
+    public void withoutSramEveryHoleIsUsable() {
+        TexticleService.setSramWindow(null);
+        withSpace(Range.of(0x206000, 0x206FFF));
+        assertEquals(0x206000, TexticleService.getNewAddress(0x100).intValue());
+    }
+
+    @Test
     public void givesNothingWhenThereIsNoFreeSpace() {
         App.config = new Config();
         assertNull(TexticleService.getNewAddress(16));

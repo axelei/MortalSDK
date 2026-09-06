@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 
 public class HeaderServiceTest {
 
@@ -70,4 +71,29 @@ public class HeaderServiceTest {
         org.junit.Assert.assertArrayEquals(antes, rom);
     }
 
+
+    @Test
+    public void theSramWindowCoversWholePages() {
+        byte[] rom = new byte[0x400];
+        rom[0x1B0] = 'R';
+        rom[0x1B1] = 'A';
+        // una SRAM de setenta y pico bytes declarada en 0x200001 tapa la página entera
+        writeU32(rom, 0x1B4, 0x200001);
+        writeU32(rom, 0x1B8, 0x200093);
+        Range window = HeaderService.sramWindow(rom);
+        assertEquals(0x200000, window.getFrom().intValue());
+        assertEquals(0x20FFFF, window.getTo().intValue());
+    }
+
+    @Test
+    public void thereIsNoSramWindowWithoutTheMark() {
+        assertNull(HeaderService.sramWindow(new byte[0x400]));
+    }
+
+    private static void writeU32(byte[] data, int at, int value) {
+        data[at] = (byte) (value >> 24);
+        data[at + 1] = (byte) (value >> 16);
+        data[at + 2] = (byte) (value >> 8);
+        data[at + 3] = (byte) value;
+    }
 }

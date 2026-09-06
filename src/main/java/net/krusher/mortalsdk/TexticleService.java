@@ -666,6 +666,18 @@ public class TexticleService {
         System.arraycopy(textData, 0, fileData, address, room);
     }
 
+    /** La zona que tapa la SRAM, si la ROM lleva; ahí no se reserva nada. */
+    private static Range sramWindow;
+
+    public static void setSramWindow(Range window) {
+        sramWindow = window;
+    }
+
+    /** Si lo reservado cayera donde luego va a estar la SRAM, el juego leería la SRAM en vez de la ROM. */
+    private static boolean hiddenBySram(int from, int size) {
+        return sramWindow != null && from <= sramWindow.getTo() && sramWindow.getFrom() <= from + size - 1;
+    }
+
     public static Integer getNewAddress(int size) {
         return getNewAddress(size, 0);
     }
@@ -679,15 +691,19 @@ public class TexticleService {
         List<Range> ranges = new ArrayList<>(App.config.spaceRanges());
         ranges.sort(Comparator.comparingInt(Range::getFrom));
         for (Range range : ranges) {
-            int from = range.getFrom();
+            // siempre en dirección par: por aquí pasan bloques comprimidos y samples que el 68000 lee a
+            // palabras, y en dirección impar le da un error de dirección en cuanto los toca. Un byte de
+            // más por reserva no se nota, y así el "+ 1" de abajo no deja el siguiente hueco impar.
+            int from = range.getFrom() + (range.getFrom() & 1);
             // el bloque cruzaría un banco, se empieza en el siguiente
             if (bankSize > 0 && from % bankSize + size > bankSize) {
                 from = (from / bankSize + 1) * bankSize;
             }
-            if (from + size - 1 > range.getTo()) {
+            if (from + size - 1 > range.getTo() || hiddenBySram(from, size)) {
                 continue;
             }
-            range.setFrom(from + size + 1);
+            int next = from + size + 1;
+            range.setFrom(next + (next & 1));
             if (range.getFrom() > range.getTo()) {
                 App.config.spaceRanges().remove(range);
             }

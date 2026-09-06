@@ -23,7 +23,41 @@ public class HeaderService {
     /** Lo que ocupa cada uno. */
     static final int NAME_SIZE = 48;
 
+    /** La marca "RA" que dice que el cartucho lleva SRAM, y dónde empieza y acaba. */
+    static final int SRAM_MARK = 0x1B0;
+    static final int SRAM_START = 0x1B4;
+    static final int SRAM_END = 0x1B8;
+
+    /** Lo que ocupa una página de las que remapea el registro de SRAM. */
+    static final int SRAM_PAGE = 0x10000;
+
     private HeaderService() {
+    }
+
+    /**
+     * La zona que tapa la SRAM cuando se habilita, o {@code null} si el cartucho no lleva. Ahí no se puede
+     * dejar nada que el juego vaya a leer de la ROM: con la SRAM puesta, esas direcciones ya no la devuelven.
+     * <p>
+     * Va por páginas de 64 KB porque así es como se remapea, no por los límites exactos de la cabecera: una
+     * SRAM de setenta y pico bytes declarada en 0x200001 tapa igualmente de 0x200000 a 0x20FFFF. Los
+     * emuladores no se ponen de acuerdo en esto -y por eso una ROM así falla en unos y en otros no-, de modo
+     * que se descarta la página entera y en paz.
+     */
+    public static Range sramWindow(byte[] fileData) {
+        if (fileData[SRAM_MARK] != 'R' || fileData[SRAM_MARK + 1] != 'A') {
+            return null;
+        }
+        int start = readU32(fileData, SRAM_START);
+        int end = readU32(fileData, SRAM_END);
+        if (start > end) {
+            return null;
+        }
+        return Range.of(start - start % SRAM_PAGE, end - end % SRAM_PAGE + SRAM_PAGE - 1);
+    }
+
+    private static int readU32(byte[] data, int at) {
+        return ((data[at] & 0xFF) << 24) | ((data[at + 1] & 0xFF) << 16)
+                | ((data[at + 2] & 0xFF) << 8) | (data[at + 3] & 0xFF);
     }
 
     /**
