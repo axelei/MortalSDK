@@ -417,7 +417,12 @@ public final class IntroService {
         // ---- el epílogo, que correrá desde RAM: sólo direccionamiento absoluto ----
         Asm epilogueAsm = new Asm(0);
         if (remap) {
-            epilogueAsm.moveBImmAbs(0x01, 0xA130F1);
+            // Se deja la ROM a la vista, que es como está al encender y como la espera el juego: éste
+            // enciende la SRAM sólo para leer o escribir la partida y la vuelve a apagar enseguida. Si se
+            // le entrega encendida, todo lo que lea de la ROM por encima de donde empieza la SRAM le
+            // devuelve la SRAM. Los emuladores tapan más o menos según lo fino que hilen, así que una ROM
+            // así falla en unos y en otros no.
+            epilogueAsm.moveBImmAbs(0x00, 0xA130F1);
         }
         epilogueAsm.clrLAbs(0xA10008);       // limpiar los registros del mando: el juego
         epilogueAsm.clrWAbs(0xA1000C);       // tiene que ver un arranque en frío

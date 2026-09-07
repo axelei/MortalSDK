@@ -23,7 +23,7 @@ public class TexticleServiceTest {
 
     private static void withFixed(Range... fixed) {
         App.config = new Config(4, Set.of(), Set.of(), new java.util.HashSet<>(), Map.of(), Map.of(),
-                Set.of(), null, Set.of(), Set.of(), Set.of(), Set.of(fixed), null, null);
+                Set.of(), null, Set.of(), Set.of(), Set.of(), Set.of(fixed), Map.of(), null, null, Set.of());
     }
 
     /** Escribe una cadena terminada en cero. */
@@ -136,7 +136,7 @@ public class TexticleServiceTest {
     @Test
     public void divertsALeaThroughATrampoline() {
         App.config = new Config(4, Set.of(), Set.of(), Set.of(), Map.of(), Map.of(), Set.of(), null,
-                Set.of(), Set.of(Range.of(0x1000, 0x1020)), Set.of(), Set.of(), null, null);
+                Set.of(), Set.of(Range.of(0x1000, 0x1020)), Set.of(), Set.of(), Map.of(), null, null, Set.of());
         byte[] rom = new byte[0x400000];
         putLea(rom, 0x100, 0x800);
         rom[0x100] = 0x47;                 // lea (d16,PC),a3, para comprobar que se respeta el registro
@@ -293,6 +293,35 @@ public class TexticleServiceTest {
     public void acceptsATexticleWithoutPointer() {
         assertEquals("000100#0004#WOOD", new Texticle(0x100, 4, "WOOD", null).format());
         assertNull(Texticle.Pointer.parse("  "));
+    }
+
+
+    @Test
+    public void aChainStopsAtATextThatIsPointedTo() {
+        byte[] rom = new byte[0x400];
+        System.arraycopy("UNO".getBytes(StandardCharsets.ISO_8859_1), 0, rom, 0x100, 3);
+        rom[0x103] = 0;
+        System.arraycopy("DOS".getBytes(StandardCharsets.ISO_8859_1), 0, rom, 0x104, 3);
+        rom[0x107] = 0;
+        Texticle uno = new Texticle(0x100, 3, "UNO", null);
+        Texticle dos = new Texticle(0x104, 3, "DOS", null);
+        List<Texticle> ambos = List.of(uno, dos);
+
+        // sin puntero propio, el segundo va detrás del primero y se movería con él
+        assertEquals(2, TexticleService.chainOf(uno, ambos, rom, Set.of()).size());
+
+        // con puntero propio, la cadena se corta: el juego llega a él por su cuenta
+        assertEquals(1, TexticleService.chainOf(uno, ambos, rom, Set.of(0x104)).size());
+    }
+
+    @Test
+    public void theOperandOfAMoveLCountsAsAPointerHoweverFarItIs() {
+        byte[] rom = new byte[0x40000];
+        // move.l #$0002FF00,(a3)+ en 0x100, apuntando lejísimos del texto
+        rom[0x100] = 0x26; rom[0x101] = (byte) 0xFC;
+        rom[0x102] = 0; rom[0x103] = 0x02; rom[0x104] = (byte) 0xFF; rom[0x105] = 0x00;
+        Set<Integer> pointed = TexticleService.pointedAddresses(rom);
+        assertTrue("el inmediato de un move.l es un puntero aunque esté lejos", pointed.contains(0x02FF00));
     }
 
 }

@@ -10,8 +10,10 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Iterator;
 import java.util.Objects;
 import java.util.Set;
@@ -345,6 +347,7 @@ public class TexticleService {
     }
 
     public static void insertTexticles(String file, byte[] fileData, byte[] originalData) throws IOException {
+        forgetMoves();
         List<Texticle> texticles = checkPointers(readTexticles(file), originalData);
         texticles.sort(Comparator.comparingInt(Texticle::address));
         Set<Integer> pointed = pointedAddresses(originalData);
@@ -492,8 +495,20 @@ public class TexticleService {
                 pointed.add(value);
             }
         }
+        // El operando de un "move.l #dirección, lo que sea" es un puntero se ponga donde se ponga: no vale
+        // pedirle que esté cerca del texto, que el juego puede encolar un rótulo desde la otra punta de la
+        // ROM. Y no se cuela cualquier cosa, porque tiene que ser justo el inmediato de esa instrucción.
+        for (int at = 0; at + 6 <= data.length; at += 2) {
+            if ((readWord(data, at) & 0xF03F) != MOVE_L_IMMEDIATE || data[at + 2] != 0) {
+                continue;
+            }
+            pointed.add(((data[at + 3] & 0xFF) << 16) | ((data[at + 4] & 0xFF) << 8) | (data[at + 5] & 0xFF));
+        }
         return pointed;
     }
+
+    /** Un {@code move.l #inmediato, destino}: 0010 rrr mmm 111 100, o sea opcode &amp; 0xF03F == 0x203C. */
+    static final int MOVE_L_IMMEDIATE = 0x203C;
 
     /** Cuántos bytes de texto seguidos hay a partir de esta dirección. */
     private static int lengthAt(int address, byte[] data) {
@@ -550,7 +565,7 @@ public class TexticleService {
         if (needed <= room) {
             Log.pnl("La cadena de {0} no cabe texto a texto, se reparte el hueco entre todos.",
                     Integer.toHexString(head.address()));
-            packChain(encoded, fileData, head.address(), room);
+            packChain(chain, encoded, fileData, head.address(), room);
             return;
         }
 
@@ -565,15 +580,20 @@ public class TexticleService {
             return;
         }
         Log.pnl("Se mueve entera a {0}.", Integer.toHexString(newAddress));
-        packChain(encoded, fileData, newAddress, needed + 1);
+        packChain(chain, encoded, fileData, newAddress, needed + 1);
         Arrays.fill(fileData, head.address(), head.address() + room, TERMINATOR);
         freeSpace(head.address(), room);
     }
 
     /** Escribe los textos uno detrás de otro separados por el terminador, y rellena lo que sobre. */
-    private static void packChain(List<byte[]> encoded, byte[] fileData, int address, int room) {
+    private static void packChain(List<Texticle> chain, List<byte[]> encoded, byte[] fileData, int address,
+                                  int room) {
         int at = address;
-        for (byte[] bytes : encoded) {
+        for (int i = 0; i < encoded.size(); i++) {
+            byte[] bytes = encoded.get(i);
+            if (i < chain.size() && chain.get(i).address() != at) {
+                moved.put(chain.get(i).address(), at);
+            }
             System.arraycopy(bytes, 0, fileData, at, bytes.length);
             at += bytes.length;
             fileData[at] = TERMINATOR;
@@ -656,6 +676,7 @@ public class TexticleService {
         System.arraycopy(padding, 0, fileData, address, room);
 
         Log.pnl("Moviendo el texto a la dirección {0}", Integer.toHexString(newAddress));
+        moved.put(address, newAddress);
         System.arraycopy(textData, 0, fileData, newAddress, textData.length);
         fileData[newAddress + textData.length] = TERMINATOR;
         freeSpace(address, room);
@@ -664,6 +685,85 @@ public class TexticleService {
     private static void writeCutText(byte[] textData, byte[] fileData, int address, int room) {
         Log.pnl("Se cortará el texto.");
         System.arraycopy(textData, 0, fileData, address, room);
+    }
+
+    /**
+     * Dónde ha acabado cada texto que se ha movido, por su dirección de antes. El juego no solo apunta a los
+     * textos: en algún sitio compara la dirección del que tiene delante contra una constante metida en el
+     * código, así que hay que saber a dónde ha ido cada uno para poder rehacer esas constantes.
+     */
+    private static final Map<Integer, Integer> moved = new HashMap<>();
+
+    static void forgetMoves() {
+        moved.clear();
+    }
+
+    static Integer movedTo(int address) {
+        return moved.get(address);
+    }
+
+    /**
+     * Rehace las palabras de 16 bits del código que son la dirección de un texto que se ha movido. Se leen
+     * de la ROM original, así que da igual cuántas veces se inyecte sobre lo mismo.
+     */
+    public static void fixTextRefs(byte[] fileData, byte[] originalData) {
+        if (App.config.textRefs().isEmpty()) {
+            return;
+        }
+        Log.pnl();
+        Log.pnl("Repasando las {0} referencias a textos del código:", App.config.textRefs().size());
+        List<Integer> refs = new ArrayList<>(App.config.textRefs());
+        refs.sort(Comparator.naturalOrder());
+        Map<Integer, Integer> byLowWord = new HashMap<>();
+        for (int at : refs) {
+            if (at < 0 || at + 2 > originalData.length) {
+                continue;
+            }
+            int was = readWord(originalData, at);
+            int now = Objects.isNull(moved.get(was)) ? was : moved.get(was);
+            Integer other = byLowWord.put(now & 0xFFFF, was);
+            if (Objects.nonNull(other) && other != was) {
+                Log.pnl("  Ojo: los textos de {0} y {1} acaban en la misma palabra {2}, el juego los "
+                                + "confundirá.",
+                        Integer.toHexString(other), Integer.toHexString(was),
+                        Integer.toHexString(now & 0xFFFF));
+            }
+        }
+        for (int at : refs) {
+            if (at < 0 || at + 2 > originalData.length) {
+                Log.pnl("  {0} se sale de la ROM, se ignora.", Integer.toHexString(at));
+                continue;
+            }
+            int was = readWord(originalData, at);
+            Integer now = moved.get(was);
+            if (Objects.isNull(now)) {
+                continue;
+            }
+            // la comparación es de palabra, así que de una dirección alta solo cabe la mitad de abajo. Se
+            // escribe igual: si el juego guarda la palabra baja del puntero acierta, y si no, no reconoce el
+            // texto igual que ahora, pero nunca lo confunde con otro porque la mitad baja es distinta.
+            writeWord(fileData, at, now & 0xFFFF);
+            if (now > 0xFFFF) {
+                Log.pnl("  {0}: el texto de {1} se ha ido a {2}, por encima de 64 KB. Se deja la mitad de "
+                                + "abajo; si el juego no lo reconoce, hay que acortarlo para que no se mueva.",
+                        Integer.toHexString(at), Integer.toHexString(was), Integer.toHexString(now));
+            } else {
+                Log.pnl("  {0}: el texto de {1} está ahora en {2}.",
+                        Integer.toHexString(at), Integer.toHexString(was), Integer.toHexString(now));
+            }
+        }
+    }
+
+    /** La zona que tapa la SRAM, si la ROM lleva; ahí no se reserva nada. */
+    private static Range sramWindow;
+
+    public static void setSramWindow(Range window) {
+        sramWindow = window;
+    }
+
+    /** Si lo reservado cayera donde luego va a estar la SRAM, el juego leería la SRAM en vez de la ROM. */
+    private static boolean hiddenBySram(int from, int size) {
+        return sramWindow != null && from <= sramWindow.getTo() && sramWindow.getFrom() <= from + size - 1;
     }
 
     public static Integer getNewAddress(int size) {
@@ -679,15 +779,19 @@ public class TexticleService {
         List<Range> ranges = new ArrayList<>(App.config.spaceRanges());
         ranges.sort(Comparator.comparingInt(Range::getFrom));
         for (Range range : ranges) {
-            int from = range.getFrom();
+            // siempre en dirección par: por aquí pasan bloques comprimidos y samples que el 68000 lee a
+            // palabras, y en dirección impar le da un error de dirección en cuanto los toca. Un byte de
+            // más por reserva no se nota, y así el "+ 1" de abajo no deja el siguiente hueco impar.
+            int from = range.getFrom() + (range.getFrom() & 1);
             // el bloque cruzaría un banco, se empieza en el siguiente
             if (bankSize > 0 && from % bankSize + size > bankSize) {
                 from = (from / bankSize + 1) * bankSize;
             }
-            if (from + size - 1 > range.getTo()) {
+            if (from + size - 1 > range.getTo() || hiddenBySram(from, size)) {
                 continue;
             }
-            range.setFrom(from + size + 1);
+            int next = from + size + 1;
+            range.setFrom(next + (next & 1));
             if (range.getFrom() > range.getTo()) {
                 App.config.spaceRanges().remove(range);
             }

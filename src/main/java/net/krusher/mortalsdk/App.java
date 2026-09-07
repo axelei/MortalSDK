@@ -71,6 +71,13 @@ public class App {
         Log.pnl("Leyendo archivo: " + file);
         byte[] fileData = Files.readAllBytes(Paths.get(file));
         byte[] originalData = fileData.clone();
+        // con la SRAM habilitada esas direcciones dejan de devolver la ROM, así que no se reparte nada ahí
+        Range sram = HeaderService.sramWindow(fileData);
+        TexticleService.setSramWindow(sram);
+        if (sram != null) {
+            Log.pnl("La ROM lleva SRAM: no se usará de {0} a {1} para colocar nada.",
+                    Integer.toHexString(sram.getFrom()), Integer.toHexString(sram.getTo()));
+        }
         Log.pnl("Inyectando bloques...");
         File extractedDir = new File("extracted");
         File[] extractedFiles = extractedDir.listFiles();
@@ -88,7 +95,9 @@ public class App {
         }
         Log.pnl("Inyectando textos...");
         TexticleService.insertTexticles(file, fileData, originalData);
+        TexticleService.fixTextRefs(fileData, originalData);
         CodeService.skipRoutines(fileData);
+        CodeService.applyPatches(fileData);
         Log.pnl("Inyección terminada.");
         // la intro va la última, sobre la ROM ya reescrita, y antes del checksum
         Log.pnl("Inyectando intro...");
