@@ -347,9 +347,11 @@ public final class Png {
         if (palette == null || indices == null) {
             throw new IllegalStateException("sólo se escriben imágenes indexadas, y ésta no trae paleta");
         }
-        if (palette.length > (1 << WRITE_BIT_DEPTH)) {
-            throw new IllegalStateException("la paleta tiene " + palette.length + " colores, más de los "
-                    + (1 << WRITE_BIT_DEPTH) + " que puede indexar un PNG de " + WRITE_BIT_DEPTH + " bits");
+        // 4 bits si caben 16 colores (lo normal en Mega Drive); 8 bits si la paleta es mayor, hasta 256
+        int bitDepth = palette.length <= (1 << WRITE_BIT_DEPTH) ? WRITE_BIT_DEPTH : 8;
+        if (palette.length > 256) {
+            throw new IllegalStateException("la paleta tiene " + palette.length
+                    + " colores, más de los 256 que puede indexar un PNG");
         }
 
         int width = image.getWidth();
@@ -361,7 +363,7 @@ public final class Png {
         ByteArrayOutputStream ihdr = new ByteArrayOutputStream();
         writeU32(ihdr, width);
         writeU32(ihdr, height);
-        ihdr.write(WRITE_BIT_DEPTH);
+        ihdr.write(bitDepth);
         ihdr.write(COLOR_TYPE_INDEXED);
         ihdr.write(0); // deflate
         ihdr.write(0); // filtrado adaptativo
@@ -376,22 +378,26 @@ public final class Png {
         }
         writeChunk(out, "PLTE", plte.toByteArray());
 
-        writeChunk(out, "IDAT", deflate(scanlines(indices, width, height)));
+        writeChunk(out, "IDAT", deflate(scanlines(indices, width, height, bitDepth)));
         writeChunk(out, "IEND", new byte[0]);
         return out.toByteArray();
     }
 
-    /** Filas de medios bytes, cada una detrás de su byte de filtro (0 = sin filtrar). */
-    private static byte[] scanlines(byte[] indices, int width, int height) {
-        int stride = (width * WRITE_BIT_DEPTH + 7) / 8;
+    /** Filas de medios bytes (4 bits) o de bytes enteros (8 bits), cada una detrás de su byte de filtro (0 = sin filtrar). */
+    private static byte[] scanlines(byte[] indices, int width, int height, int bitDepth) {
+        int stride = (width * bitDepth + 7) / 8;
         byte[] raw = new byte[(stride + 1) * height];
         int at = 0;
         for (int y = 0; y < height; y++) {
             raw[at++] = 0;
             for (int x = 0; x < width; x++) {
-                int index = indices[y * width + x] & 0xF;
-                int shift = (x & 1) == 0 ? 4 : 0;
-                raw[at + x / 2] |= (byte) (index << shift);
+                if (bitDepth == 8) {
+                    raw[at + x] = indices[y * width + x];
+                } else {
+                    int index = indices[y * width + x] & 0xF;
+                    int shift = (x & 1) == 0 ? 4 : 0;
+                    raw[at + x / 2] |= (byte) (index << shift);
+                }
             }
             at += stride;
         }
