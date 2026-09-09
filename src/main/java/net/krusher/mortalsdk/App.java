@@ -4,6 +4,7 @@ import com.google.common.collect.BiMap;
 import org.apache.commons.lang3.StringUtils;
 import java.io.File;
 import net.krusher.mortalsdk.fondos.FondoCli;
+import net.krusher.mortalsdk.fondos.FondoService;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -30,10 +31,6 @@ public class App {
         if (args[0].equals("fondos")) {
             FondoCli.editor(args);
             return;
-        }
-        if (args[0].equals("fondos-rom")) {
-            FondoCli.generar(args);
-            System.exit(0);
         }
 
         //check parameters
@@ -75,6 +72,10 @@ public class App {
         SampleService.extract(fileData);
         Log.pnl("Extrayendo datos sin comprimir...");
         BlockService.extractUncompressedBlock(config.bins(), "bin", fileData);
+        if (StringUtils.isNotBlank(config.fondos())) {
+            Log.pnl("Extrayendo fondos de combate...");
+            FondoService.extraer(new File(config.fondos()), fileData);
+        }
         Log.pnl("Extrayendo textos...");
         List<Texticle> texts = TexticleService.findTexticles(fileData);
         Log.pnl("Extracción terminada, escribiendo salida...");
@@ -113,6 +114,10 @@ public class App {
         TexticleService.insertTexticles(file, fileData, originalData);
         CodeService.skipRoutines(fileData);
         CodeService.applyPatches(fileData);
+        if (StringUtils.isNotBlank(config.fondos())) {
+            Log.pnl("Inyectando fondos de combate...");
+            FondoService.inyectar(new File(config.fondos()), fileData, config.fondosSpace());
+        }
         Log.pnl("Inyección terminada.");
         // la intro va la última, sobre la ROM ya reescrita, y antes del checksum
         Log.pnl("Inyectando intro...");

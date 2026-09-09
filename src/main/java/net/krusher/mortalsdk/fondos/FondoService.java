@@ -1,12 +1,16 @@
 package net.krusher.mortalsdk.fondos;
 
 import net.krusher.mortalsdk.Checksum;
+import net.krusher.mortalsdk.Log;
+import net.krusher.mortalsdk.Range;
 import net.krusher.mortalsdk.RncException;
 import net.krusher.mortalsdk.RncService;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Set;
 
@@ -42,6 +46,13 @@ public final class FondoService {
                     throw new IllegalArgumentException("Rango de espacio mal escrito: " + parte);
                 }
                 rangos.add(new int[]{Integer.decode(ab[0].trim()), Integer.decode(ab[1].trim())});
+            }
+        }
+
+        /** Los huecos tal y como los da la configuración, en {@code fondosSpace}. */
+        public Espacio(Collection<Range> huecos) {
+            for (Range r : huecos) {
+                rangos.add(new int[]{r.getFrom(), r.getTo()});
             }
         }
 
@@ -234,5 +245,81 @@ public final class FondoService {
     /** Termina la ROM: checksum de la cabecera. */
     public static void terminar(byte[] rom) {
         Checksum.fixChecksum(rom);
+    }
+
+    // ------------------------------------------------------------------ los dos pasos del flujo normal
+
+    /**
+     * Un escenario entra en la ROM cuando el editor ha guardado lo suyo. Los demás se dejan en paz para no
+     * mover bloques ni gastar hueco sin motivo.
+     */
+    public static boolean editado(File carpeta, Escenario e) {
+        return new File(carpeta, e.carpeta() + "/fondo.properties").isFile();
+    }
+
+    /**
+     * Rehace los ficheros con los que se trabaja (los planos, la hoja de tiles, los mapas, la paleta y las
+     * animaciones) desde los volcados de la memoria de vídeo y la ROM. Lo que ya haya editado el editor no se
+     * toca, que rehacerlo se llevaría por delante lo pintado.
+     * <p>
+     * Los volcados no salen de aquí: los saca el emulador, con el guion que hay en la carpeta de fondos.
+     */
+    public static void extraer(File carpeta, byte[] rom) throws IOException {
+        if (!carpeta.isDirectory()) {
+            Log.pnl("No hay carpeta de fondos en {0}, no se extrae ninguno.", carpeta.getPath());
+            return;
+        }
+        for (Escenario e : Escenario.TODOS) {
+            File suya = new File(carpeta, e.carpeta());
+            if (!suya.isDirectory()) {
+                Log.pnl("  {0}: no está su carpeta, se salta.", e.nombre());
+                continue;
+            }
+            if (editado(carpeta, e)) {
+                Log.pnl("  {0}: lo tiene guardado el editor, se deja como está.", e.nombre());
+                continue;
+            }
+            Fondo fondo = Fondo.cargar(carpeta, e, rom, false);
+            fondo.guardar(false);
+            Log.pnl("  {0}: {1} tiles, los dos planos, la paleta y {2} animaciones.",
+                    e.nombre(), fondo.tiles.length, e.animaciones().size());
+        }
+    }
+
+    /** Mete en la ROM los fondos que se hayan editado. Devuelve cuántos han entrado. */
+    public static int inyectar(File carpeta, byte[] rom, Collection<Range> huecos) throws IOException {
+        if (!carpeta.isDirectory()) {
+            Log.pnl("No hay carpeta de fondos en {0}, no se inyecta ninguno.", carpeta.getPath());
+            return 0;
+        }
+        List<Escenario> editados = new ArrayList<>();
+        for (Escenario e : Escenario.TODOS) {
+            if (editado(carpeta, e)) {
+                editados.add(e);
+            }
+        }
+        if (editados.isEmpty()) {
+            Log.pnl("Ningún fondo editado, la ROM se queda con los suyos.");
+            return 0;
+        }
+        if (huecos.isEmpty()) {
+            throw new IOException("Hay " + editados.size() + " fondo(s) editado(s) pero la configuración no dice"
+                    + " dónde ponerlos: hace falta la propiedad fondosSpace.");
+        }
+        Espacio espacio = new Espacio(huecos);
+        for (Escenario e : editados) {
+            Fondo fondo = Fondo.cargar(carpeta, e, rom);
+            Resultado r = inyectar(rom, fondo, espacio);
+            Log.pf("  %s: %d tiles; rutina en 0x%06X, tiles en 0x%06X (%d B), mapas en 0x%06X (%d B) y 0x%06X (%d B)%n",
+                    e.nombre(), fondo.tiles.length, r.rutina(), r.tiles(), r.bytesTiles(), r.mapaA(), r.bytesMapaA(),
+                    r.mapaB(), r.bytesMapaB());
+            if (r.tilesAnimacionCambiados() > 0) {
+                Log.pnl("    tiles de animación reescritos: {0}", r.tilesAnimacionCambiados());
+            }
+            if (r.paletaCambiada()) {
+                Log.pnl("    paleta del escenario reescrita.");
+            }
+        }
+        return editados.size();
     }
 }
