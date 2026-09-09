@@ -4,8 +4,10 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -156,7 +158,7 @@ public final class SampleService {
         for (Sample sample : table) {
             byId.put(sample.id(), sample);
         }
-        Set<Integer> found = new HashSet<>();
+        Map<Integer, File> files = new LinkedHashMap<>();
         for (File file : extractedFiles) {
             String name = file.getName();
             if (!name.startsWith(PREFIX) || !name.endsWith(EXTENSION)) {
@@ -172,12 +174,29 @@ public final class SampleService {
                 Log.pnl("El sample {0} no está en la tabla de la ROM, se ignora {1}.", id, name);
                 continue;
             }
-            found.add(id);
-            injectSample(sample, file, fileData, originalData, isAlone(sample, table));
+            File previous = files.put(id, file);
+            if (Objects.nonNull(previous)) {
+                Log.pnl("Hay dos ficheros para el sample {0}: se usa {1} y se ignora {2}.",
+                        String.format("%02x", id), name, previous.getName());
+            }
+        }
+        Set<Integer> found = new HashSet<>(files.keySet());
+        Set<Integer> moved = new HashSet<>();
+        for (List<Sample> group : sharedGroups(table)) {
+            if (group.size() == 1) {
+                Sample sample = group.getFirst();
+                File file = files.get(sample.id());
+                if (Objects.nonNull(file)) {
+                    injectSample(sample, file, fileData, originalData);
+                }
+            } else {
+                injectGroup(group, files, fileData, originalData, moved);
+            }
         }
         List<String> deleted = new ArrayList<>();
         for (Sample sample : table) {
-            if (!sample.isEmpty() && sample.fitsInRom(originalData.length) && !found.contains(sample.id())) {
+            if (!sample.isEmpty() && sample.fitsInRom(originalData.length)
+                    && !found.contains(sample.id()) && !moved.contains(sample.id())) {
                 deleted.add(String.format("%02x", sample.id()));
             }
         }
@@ -188,26 +207,137 @@ public final class SampleService {
     }
 
     /**
-     * Si los bytes de este sample no los comparte ningún otro de la tabla.
-     * <p>
-     * En esta ROM es de lo más normal que sí: hay entradas distintas que apuntan al mismo sitio y otras que
-     * son un trozo de la de al lado. El hueco de uno así no se puede dar por libre aunque se mueva.
+     * Agrupa las entradas que comparten bytes. En esta ROM es de lo más normal que varias apunten al mismo
+     * sitio o que una sea un trozo de la de al lado, así que cada grupo de esos es un tramo contiguo de la
+     * ROM que hay que tratar entero: escribir dentro estropea a la vez a todas las entradas que lo comparten.
      */
-    private static boolean isAlone(Sample sample, List<Sample> table) {
-        for (Sample other : table) {
-            if (other.entryAddress() == sample.entryAddress() || other.isEmpty()) {
-                continue;
-            }
-            if (other.offset() < sample.offset() + sample.length()
-                    && sample.offset() < other.offset() + other.length()) {
-                return false;
+    private static List<List<Sample>> sharedGroups(List<Sample> table) {
+        List<Sample> used = new ArrayList<>();
+        for (Sample sample : table) {
+            if (!sample.isEmpty()) {
+                used.add(sample);
             }
         }
-        return true;
+        used.sort(Comparator.comparingInt(Sample::offset));
+        List<List<Sample>> groups = new ArrayList<>();
+        List<Sample> current = new ArrayList<>();
+        int end = -1;
+        for (Sample sample : used) {
+            if (current.isEmpty() || sample.offset() >= end) {
+                if (!current.isEmpty()) {
+                    groups.add(current);
+                }
+                current = new ArrayList<>();
+                end = sample.offset() + sample.length();
+            } else {
+                end = Math.max(end, sample.offset() + sample.length());
+            }
+            current.add(sample);
+        }
+        if (!current.isEmpty()) {
+            groups.add(current);
+        }
+        return groups;
     }
 
-    private static void injectSample(Sample sample, File file, byte[] fileData, byte[] originalData,
-                                     boolean canFree) throws IOException {
+    /**
+     * Inyecta un tramo compartido por varias entradas. Como no se puede escribir dentro sin estropear a las
+     * vecinas, en cuanto una sola cambia se llevan todas a espacio libre, cada una con sus bytes; las que no
+     * se han tocado se copian tal cual de la ROM original. Al final se suelta el tramo entero, porque ya no
+     * lo apunta nadie.
+     */
+    private static void injectGroup(List<Sample> group, Map<Integer, File> files, byte[] fileData,
+                                    byte[] originalData, Set<Integer> moved) throws IOException {
+        List<byte[]> pcms = new ArrayList<>();
+        List<Integer> rates = new ArrayList<>();
+        boolean modified = false;
+        for (Sample sample : group) {
+            File file = files.get(sample.id());
+            if (Objects.isNull(file) || !sample.fitsInRom(originalData.length)) {
+                pcms.add(Arrays.copyOfRange(originalData, sample.offset(), sample.offset() + sample.length()));
+                rates.add(sample.rate());
+                continue;
+            }
+            WavService.WavData wav = WavService.read(file);
+            int rate = rateOf(wav.sampleRate());
+            pcms.add(wav.pcm());
+            rates.add(rate);
+            if (!isUnmodified(sample, wav.pcm(), rate, originalData)) {
+                modified = true;
+                if (wav.sampleRate() != frequencyOf(rate)) {
+                    Log.pnl();
+                    Log.pnl("{0} se reproducirá a {1} Hz, lo más cercano a los {2} Hz del WAV.",
+                            file.getName(), frequencyOf(rate), wav.sampleRate());
+                }
+            }
+        }
+        if (!modified) {
+            return;
+        }
+        int from = group.getFirst().offset();
+        int to = from;
+        for (Sample sample : group) {
+            from = Math.min(from, sample.offset());
+            to = Math.max(to, sample.offset() + sample.length());
+        }
+        Log.pnl();
+        Log.pnl("Los samples {0} comparten los {1} bytes de {2} y alguno ha cambiado: se separan.",
+                ids(group), to - from, toHex(from));
+        for (byte[] pcm : pcms) {
+            if (pcm.length == 0 || pcm.length > MAX_LENGTH) {
+                Log.pnl("Uno tiene {0} bytes y la tabla solo admite de 1 a {1}, se dejan como estaban.",
+                        pcm.length, MAX_LENGTH);
+                return;
+            }
+        }
+        // primero se reparte el propio tramo, que ya es suyo, y solo lo que no quepa sale del espacio libre;
+        // se reserva todo antes de tocar nada, para que si falta sitio el tramo se quede como estaba
+        List<Integer> offsets = new ArrayList<>();
+        int cursor = from;
+        for (byte[] pcm : pcms) {
+            int at = cursor + (cursor & 1);
+            if (at % BANK_SIZE + pcm.length > BANK_SIZE) {
+                at = (at / BANK_SIZE + 1) * BANK_SIZE;
+            }
+            if (at + pcm.length <= to) {
+                offsets.add(at);
+                cursor = at + pcm.length;
+                continue;
+            }
+            Integer offset = TexticleService.getNewAddress(pcm.length, BANK_SIZE);
+            if (Objects.isNull(offset) || offset + pcm.length > fileData.length) {
+                Log.pnl("No hay espacio libre para separarlos, se dejan como estaban y sonarán mezclados.");
+                return;
+            }
+            offsets.add(offset);
+        }
+        for (int i = 0; i < group.size(); i++) {
+            Sample sample = group.get(i);
+            byte[] pcm = pcms.get(i);
+            int offset = offsets.get(i);
+            System.arraycopy(pcm, 0, fileData, offset, pcm.length);
+            writeThreeBytes(fileData, sample.entryAddress() + 1, offset);
+            writeWord(fileData, sample.entryAddress() + 4, pcm.length);
+            writeWord(fileData, sample.entryAddress() + 6, rates.get(i));
+            moved.add(sample.id());
+            Log.pnl("  {0}: {1} bytes en {2}.", String.format("%02x", sample.id()), pcm.length, toHex(offset));
+        }
+        int rest = cursor + (cursor & 1);
+        if (rest < to) {
+            TexticleService.freeSpace(rest, to - rest);
+        }
+    }
+
+    private static String ids(List<Sample> group) {
+        List<String> names = new ArrayList<>();
+        for (Sample sample : group) {
+            names.add(String.format("%02x", sample.id()));
+        }
+        return String.join(", ", names);
+    }
+
+    private static void injectSample(Sample sample, File file, byte[] fileData, byte[] originalData)
+            throws IOException {
         WavService.WavData wav = WavService.read(file);
         byte[] pcm = wav.pcm();
         int rate = rateOf(wav.sampleRate());
@@ -238,10 +368,7 @@ public final class SampleService {
             Log.pnl();
             Log.pnl("{0} ocupa {1} bytes, más que los {2} de su hueco: se mueve a {3}.",
                     file.getName(), pcm.length, sample.length(), toHex(offset));
-            // los samples se apuntan unos a otros, así que el hueco sólo se suelta si era sólo suyo
-            if (canFree) {
-                TexticleService.freeSpace(sample.offset(), sample.length());
-            }
+            TexticleService.freeSpace(sample.offset(), sample.length());
         }
         // Los samples van pegados unos a otros, así que si el nuevo es más corto no se rellena el sobrante:
         // solo se acorta la longitud de la entrada.

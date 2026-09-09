@@ -30,6 +30,10 @@ import java.util.Set;
  * @param fondosSpace zonas de la ROM donde caben los tiles, los mapas y la rutina de carga de cada fondo que se
  *                    haya editado. Va aparte de {@code spaceRanges} para que no se pisen
  * @param romName  el nombre que se le pone a la ROM en la cabecera, si se quiere
+ * @param textRefs direcciones de la ROM donde hay una palabra de 16 bits que es la direccion de un
+ *                 texto, y que por tanto hay que rehacer si ese texto acaba en otro sitio. El juego se
+ *                 vale de ellas para reconocer que texto tiene delante, asi que si se quedan viejas
+ *                 confunde unos con otros. Se dan apuntando a la palabra en si, no a la instruccion.
  * @param ipsBase  la ROM contra la que se calcula el parche IPS. Sin esto se usa la de entrada, que es lo
  *                 normal; se pone cuando lo que se reparte tiene que aplicarse sobre otra ROM distinta,
  *                 como la del juego original en vez de la del hack del que se parte.
@@ -49,6 +53,7 @@ public record Config(int minChars,
                      Map<Integer, byte[]> codePatches,
                      String romName,
                      String ipsBase,
+                     Set<Integer> textRefs,
                      String fondos,
                      Set<Range> fondosSpace) {
 
@@ -59,7 +64,7 @@ public record Config(int minChars,
 
     public Config() {
         this(DEFAULT_MIN_CHARS, Set.of(), Set.of(), new HashSet<>(), Map.of(), Map.of(), Set.of(), null,
-                Set.of(), Set.of(), Set.of(), Set.of(), Map.of(), null, null, null, Set.of());
+                Set.of(), Set.of(), Set.of(), Set.of(), Map.of(), null, null, Set.of(), null, Set.of());
     }
 
     public static Config getInstance(String fileName) throws IOException {
@@ -86,10 +91,11 @@ public record Config(int minChars,
         Map<Integer, byte[]> codePatches = parsePatches(properties.getProperty("codePatches"));
         String romName = properties.getProperty("romName");
         String ipsBase = properties.getProperty("ipsBase");
+        Set<Integer> textRefs = parseAddresses(properties.getProperty("textRefs"));
         String fondos = properties.getProperty("fondos");
         Set<Range> fondosSpace = parseRanges(properties.getProperty("fondosSpace"));
         return new Config(minChars, textRanges, bins, spaceRanges, palettes, scenes, texts, intro, introSpace,
-                codeSpace, skipRoutines, fixedTexts, codePatches, romName, ipsBase, fondos, fondosSpace);
+                codeSpace, skipRoutines, fixedTexts, codePatches, romName, ipsBase, textRefs, fondos, fondosSpace);
     }
 
     /**

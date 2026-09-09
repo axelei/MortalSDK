@@ -112,6 +112,7 @@ public class App {
         }
         Log.seccion("Inyectando textos");
         TexticleService.insertTexticles(file, fileData, originalData);
+        TexticleService.fixTextRefs(fileData, originalData);
         CodeService.skipRoutines(fileData);
         CodeService.applyPatches(fileData);
         if (StringUtils.isNotBlank(config.fondos())) {
