@@ -3,6 +3,7 @@ package net.krusher.mortalsdk;
 import com.google.common.collect.BiMap;
 import org.apache.commons.lang3.StringUtils;
 import java.io.File;
+import net.krusher.mortalsdk.fondos.FondoEditor;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -19,6 +20,23 @@ public class App {
     public static void main( String[] args ) throws IOException {
 
         Log.pnl("MortalSDK by Krusher - Programa bajo licencia GPL 3");
+
+        if (args.length == 0) {
+            displayHelp();
+            System.exit(1);
+        }
+
+        //editor de fondos de combate: no necesita ni tbl ni configuracion
+        if (args[0].equals("fondos")) {
+            File carpeta = new File(args.length > 1 ? args[1] : "fondos");
+            File rom = new File(args.length > 2 ? args[2] : "Mortal Kombat Arcade Edition v2-7.bin");
+            if (!carpeta.isDirectory() || !rom.isFile()) {
+                Log.pnl("Uso: fondos \"carpeta-fondos\" \"rom.bin\" [captura.png]");
+                System.exit(1);
+            }
+            FondoEditor.abrir(carpeta, rom, args.length > 3 ? args[3] : null);
+            return;
+        }
 
         //check parameters
         if (args.length < 2) {
