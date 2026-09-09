@@ -30,7 +30,6 @@ public final class FondoService {
 
     static final Set<Integer> RUTINAS_ORIGINALES = Set.of(0x60C, 0x3D14CE, 0x3D14DA, 0x9AA, 0x788, 0x568, 0xB2A);
     static final int CARGA_TILES = 0xB94, CARGA_RAM = 0xB88, COPIA = 0xC7A;
-    public static final String ESPACIO_POR_DEFECTO = "0x3F6800-0x3FFF00";
 
     private FondoService() {}
 
@@ -38,16 +37,6 @@ public final class FondoService {
     public static final class Espacio {
         private final List<int[]> rangos = new ArrayList<>();
         public final List<int[]> usado = new ArrayList<>();
-
-        public Espacio(String texto) {
-            for (String parte : texto.split(",")) {
-                String[] ab = parte.trim().split("-");
-                if (ab.length != 2) {
-                    throw new IllegalArgumentException("Rango de espacio mal escrito: " + parte);
-                }
-                rangos.add(new int[]{Integer.decode(ab[0].trim()), Integer.decode(ab[1].trim())});
-            }
-        }
 
         /** Los huecos tal y como los da la configuración, en {@code fondosSpace}. */
         public Espacio(Collection<Range> huecos) {

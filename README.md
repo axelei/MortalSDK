@@ -171,7 +171,7 @@ se deja en blanco, los fondos ni se miran:
 
 ```properties
 fondos=fondos
-fondosSpace=0x2D6C90-0x2D9FF0,0x2DC940-0x2DFF00
+fondosSpace=0x2D6C90,0x2D9FF0#0x2DC940,0x2DFF00
 ```
 
 `fondosSpace` son los huecos de la ROM donde caben los tiles, los mapas y la rutina de carga de cada fondo que
@@ -205,7 +205,8 @@ suyo. Las animaciones se editan aparte, fotograma a fotograma.
 MortalSDK fondos "fondos" "mortal kombat.bin"
 ```
 
-Lo que guarda es lo que luego mete `i` en la ROM.
+Lo que guarda es lo que luego mete `i` en la ROM: el editor pinta y guarda, y la ROM la hace la inyección de
+siempre.
 
 ### Inyección:
 

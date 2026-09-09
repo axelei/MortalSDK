@@ -10,7 +10,6 @@ import javax.swing.ButtonGroup;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
 import javax.swing.JComboBox;
-import javax.swing.JFileChooser;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
@@ -178,7 +177,6 @@ public final class FondoEditor {
 
         p.add(Box.createHorizontalStrut(8));
         p.add(boton("Guardar", a -> guardar()));
-        p.add(boton("Generar ROM…", a -> generarRom()));
         p.add(boton("Compactar", a -> compactar()));
         p.add(boton("Animaciones…", a -> editarAnimacion()));
         return p;
@@ -239,26 +237,6 @@ public final class FondoEditor {
         int liberados = fondo.compactar();
         aviso("Tiles repetidos juntados: " + liberados + " slots libres más");
         repintar();
-    }
-
-    private void generarRom() {
-        JFileChooser fc = new JFileChooser(romFile.getParentFile());
-        fc.setSelectedFile(new File(romFile.getParentFile(), "fondos.bin"));
-        if (fc.showSaveDialog(ventana) != JFileChooser.APPROVE_OPTION) {
-            return;
-        }
-        try {
-            fondo.guardar();
-            byte[] copia = rom.clone();
-            FondoService.Espacio espacio = new FondoService.Espacio(FondoService.ESPACIO_POR_DEFECTO);
-            FondoService.Resultado r = FondoService.inyectar(copia, fondo, espacio);
-            FondoService.terminar(copia);
-            Files.write(fc.getSelectedFile().toPath(), copia);
-            aviso(String.format("ROM escrita: %s%nrutina 0x%06X, tiles 0x%06X (%d B), mapas 0x%06X y 0x%06X",
-                    fc.getSelectedFile().getName(), r.rutina(), r.tiles(), r.bytesTiles(), r.mapaA(), r.mapaB()));
-        } catch (IOException e) {
-            error(e);
-        }
     }
 
     private void voltear(boolean horizontal) {
