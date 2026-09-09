@@ -3,7 +3,7 @@ package net.krusher.mortalsdk;
 import com.google.common.collect.BiMap;
 import org.apache.commons.lang3.StringUtils;
 import java.io.File;
-import net.krusher.mortalsdk.fondos.FondoEditor;
+import net.krusher.mortalsdk.fondos.FondoCli;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -26,16 +26,14 @@ public class App {
             System.exit(1);
         }
 
-        //editor de fondos de combate: no necesita ni tbl ni configuracion
+        //fondos de combate: ni tbl ni configuracion, se apanan con la carpeta de fondos y la ROM
         if (args[0].equals("fondos")) {
-            File carpeta = new File(args.length > 1 ? args[1] : "fondos");
-            File rom = new File(args.length > 2 ? args[2] : "Mortal Kombat Arcade Edition v2-7.bin");
-            if (!carpeta.isDirectory() || !rom.isFile()) {
-                Log.pnl("Uso: fondos \"carpeta-fondos\" \"rom.bin\" [captura.png]");
-                System.exit(1);
-            }
-            FondoEditor.abrir(carpeta, rom, args.length > 3 ? args[3] : null);
+            FondoCli.editor(args);
             return;
+        }
+        if (args[0].equals("fondos-rom")) {
+            FondoCli.generar(args);
+            System.exit(0);
         }
 
         //check parameters
@@ -153,6 +151,7 @@ public class App {
         Log.pnl("Debe especificarse modo y archivo");
         Log.pnl("Ejemplos: x \"rom a extraer.bin\" [\"configuracion\"]");
         Log.pnl("          i \"rom a inyectar.bin\" [\"configuracion\"]");
+        FondoCli.ayuda();
         Log.pnl("Modo: x = extraer, i = inyectar");
         Log.pnl("Configuración: Opcional, se puede dejar en blanco y se usará una por defecto.");
         Log.pnl("Ejemplos de configuración en el directorio \"configs\".");
