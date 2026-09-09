@@ -63,28 +63,28 @@ public class App {
     }
 
     public static void extract(String file) throws IOException {
-        Log.pnl("Modo: Extraer");
+        Log.seccion("Modo: extraer");
         Log.pnl("Leyendo archivo: " + file);
         byte[] fileData = Files.readAllBytes(Paths.get(file));
-        Log.pnl("Extrayendo bloques comprimidos...");
+        Log.seccion("Extrayendo bloques comprimidos");
         BlockService.extractCompressedBlocks(fileData);
-        Log.pnl("Extrayendo samples PCM...");
+        Log.seccion("Extrayendo samples PCM");
         SampleService.extract(fileData);
-        Log.pnl("Extrayendo datos sin comprimir...");
+        Log.seccion("Extrayendo datos sin comprimir");
         BlockService.extractUncompressedBlock(config.bins(), "bin", fileData);
         if (StringUtils.isNotBlank(config.fondos())) {
-            Log.pnl("Extrayendo fondos de combate...");
+            Log.seccion("Extrayendo fondos de combate");
             FondoService.extraer(new File(config.fondos()), fileData);
         }
-        Log.pnl("Extrayendo textos...");
+        Log.seccion("Extrayendo textos");
         List<Texticle> texts = TexticleService.findTexticles(fileData);
-        Log.pnl("Extracción terminada, escribiendo salida...");
+        Log.seccion("Extracción terminada, escribiendo salida");
         TexticleService.dumpTexticles(texts, file);
         Log.pnl("Salida escrita en: " + file + ".txt");
     }
 
     public static void inject(String file) throws IOException {
-        Log.pnl("Modo: Inyectar");
+        Log.seccion("Modo: inyectar");
         Log.pnl("Leyendo archivo: " + file);
         byte[] fileData = Files.readAllBytes(Paths.get(file));
         byte[] originalData = fileData.clone();
@@ -95,7 +95,7 @@ public class App {
             Log.pnl("La ROM lleva SRAM: no se usará de {0} a {1} para colocar nada.",
                     Integer.toHexString(sram.getFrom()), Integer.toHexString(sram.getTo()));
         }
-        Log.pnl("Inyectando bloques...");
+        Log.seccion("Inyectando bloques");
         File extractedDir = new File("extracted");
         File[] extractedFiles = extractedDir.listFiles();
         if (extractedFiles == null || extractedFiles.length == 0) {
@@ -110,28 +110,28 @@ public class App {
             BlockService.injectUncompressedBlocks(extractedFiles, fileData, originalData, "bin", config.bins());
             Log.pnl();
         }
-        Log.pnl("Inyectando textos...");
+        Log.seccion("Inyectando textos");
         TexticleService.insertTexticles(file, fileData, originalData);
         CodeService.skipRoutines(fileData);
         CodeService.applyPatches(fileData);
         if (StringUtils.isNotBlank(config.fondos())) {
-            Log.pnl("Inyectando fondos de combate...");
+            Log.seccion("Inyectando fondos de combate");
             FondoService.inyectar(new File(config.fondos()), fileData, config.fondosSpace());
         }
-        Log.pnl("Inyección terminada.");
+        Log.seccion("Inyección terminada");
         // la intro va la última, sobre la ROM ya reescrita, y antes del checksum
-        Log.pnl("Inyectando intro...");
+        Log.seccion("Inyectando intro");
         IntroService.inject(fileData, originalData);
         // el nombre va el último: así manda sobre lo que hayan escrito los textos en la cabecera
         HeaderService.writeName(fileData);
-        Log.pnl("Arreglando checksum...");
+        Log.seccion("Arreglando checksum");
         Checksum.fixChecksum(fileData);
-        Log.pnl("Escribiendo salida...");
+        Log.seccion("Escribiendo salida");
         File outputFile = new File(file + ".patched.bin");
         Files.write(outputFile.toPath(), fileData);
         Log.pnl("Salida escrita en: " + outputFile.getAbsolutePath());
         // lo que se reparte no es la ROM, que es casi toda del juego, sino el parche con lo que hemos puesto
-        Log.pnl("Escribiendo el parche...");
+        Log.seccion("Escribiendo el parche");
         IpsService.write(ipsBase(originalData), fileData, file);
     }
 
