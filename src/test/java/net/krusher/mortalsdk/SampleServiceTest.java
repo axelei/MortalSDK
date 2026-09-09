@@ -38,7 +38,7 @@ public class SampleServiceTest {
 
     private static void withSpace(Range... ranges) {
         App.config = new Config(4, Set.of(), Set.of(), new HashSet<>(Set.of(ranges)), Map.of(), Map.of(),
-                Set.of(), null, Set.of(), Set.of(), Set.of(), Set.of(), Map.of(), null, null, Set.of());
+                Set.of(), null, Set.of(), Set.of(), Set.of(), Set.of(), Map.of(), null, null, Set.of(), null, Set.of());
     }
 
     /**

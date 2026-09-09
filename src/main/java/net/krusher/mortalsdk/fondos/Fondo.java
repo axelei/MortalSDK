@@ -56,12 +56,26 @@ public final class Fondo {
     // ------------------------------------------------------------------ carga
 
     public static Fondo cargar(File carpetaFondos, Escenario escenario, byte[] rom) throws IOException {
+        return cargar(carpetaFondos, escenario, rom, true);
+    }
+
+    /**
+     * @param usarGuardado si es {@code false} se hace oídos sordos a lo que haya guardado el editor y se monta
+     *                     todo otra vez desde los volcados y la ROM, que es lo que hace la extracción
+     */
+    public static Fondo cargar(File carpetaFondos, Escenario escenario, byte[] rom, boolean usarGuardado)
+            throws IOException {
         File carpeta = new File(carpetaFondos, escenario.carpeta());
         if (!carpeta.isDirectory()) {
             throw new IOException("No existe la carpeta del escenario: " + carpeta);
         }
+        File volcado = new File(carpeta, "raw/vram.bin");
+        if (!volcado.isFile()) {
+            throw new IOException("Falta " + volcado + ". Los volcados de la memoria de vídeo salen del emulador:"
+                    + " mira extraer/LEEME.md en la carpeta de fondos.");
+        }
         Fondo f = new Fondo(escenario, carpeta);
-        f.vram = Files.readAllBytes(new File(carpeta, "raw/vram.bin").toPath());
+        f.vram = Files.readAllBytes(volcado.toPath());
         byte[] cramBytes = Files.readAllBytes(new File(carpeta, "raw/cram.bin").toPath());
         for (int i = 0; i < 64; i++) {
             f.cram[i] = palabra(cramBytes, i * 2);
@@ -87,7 +101,7 @@ public final class Fondo {
         }
 
         File propiedades = new File(carpeta, "fondo.properties");
-        if (propiedades.isFile()) {
+        if (usarGuardado && propiedades.isFile()) {
             f.cargarGuardado(propiedades);
         } else {
             f.tiles = new int[n][];
@@ -239,12 +253,23 @@ public final class Fondo {
     // ------------------------------------------------------------------ guardado
 
     public void guardar() throws IOException {
-        Properties p = new Properties();
-        p.setProperty("escenario", Integer.toString(escenario.numero()));
-        p.setProperty("tiles", Integer.toString(tiles.length));
-        p.setProperty("base", "0x" + Integer.toHexString(escenario.baseTiles()));
-        try (var out = Files.newOutputStream(new File(carpeta, "fondo.properties").toPath())) {
-            p.store(out, "Fondo de combate editado con MortalSDK. Mandan tiles.png, mapa_A.txt, mapa_B.txt y paleta.txt.");
+        guardar(true);
+    }
+
+    /**
+     * @param marcarEditado escribe {@code fondo.properties}, que es lo que dice que este escenario lo ha tocado
+     *                      el editor: a partir de ahí mandan estos ficheros y no los volcados. La extracción no
+     *                      lo escribe, porque rehacer los ficheros no es haberlos editado.
+     */
+    public void guardar(boolean marcarEditado) throws IOException {
+        if (marcarEditado) {
+            Properties p = new Properties();
+            p.setProperty("escenario", Integer.toString(escenario.numero()));
+            p.setProperty("tiles", Integer.toString(tiles.length));
+            p.setProperty("base", "0x" + Integer.toHexString(escenario.baseTiles()));
+            try (var out = Files.newOutputStream(new File(carpeta, "fondo.properties").toPath())) {
+                p.store(out, "Fondo de combate editado con MortalSDK. Mandan tiles.png, mapa_A.txt, mapa_B.txt y paleta.txt.");
+            }
         }
         // hoja de tiles: 16 por fila, 4 bits, con la paleta de la línea 3 para verla
         int filas = (tiles.length + 15) / 16;

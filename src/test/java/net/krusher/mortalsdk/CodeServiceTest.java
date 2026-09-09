@@ -19,12 +19,12 @@ public class CodeServiceTest {
 
     private static void configure(Integer... routines) {
         App.config = new Config(4, Set.of(), Set.of(), Set.of(), Map.of(), Map.of(), Set.of(), null,
-                Set.of(), Set.of(), Set.of(routines), Set.of(), Map.of(), null, null, Set.of());
+                Set.of(), Set.of(), Set.of(routines), Set.of(), Map.of(), null, null, Set.of(), null, Set.of());
     }
 
     private static void withPatches(Map<Integer, byte[]> patches) {
         App.config = new Config(4, Set.of(), Set.of(), Set.of(), Map.of(), Map.of(), Set.of(), null,
-                Set.of(), Set.of(), Set.of(), Set.of(), patches, null, null, Set.of());
+                Set.of(), Set.of(), Set.of(), Set.of(), patches, null, null, Set.of(), null, Set.of());
     }
 
     @Test

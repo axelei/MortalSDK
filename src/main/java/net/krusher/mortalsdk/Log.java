@@ -14,6 +14,16 @@ public class Log {
         System.out.println(MessageFormat.format(message, args));
     }
 
+    /**
+     * Cabecera de un paso del proceso, destacada y con una línea en blanco delante. Entre todo lo que se
+     * imprime debajo (ficheros, avisos, direcciones), así se ve de un vistazo por dónde va la extracción o la
+     * inyección.
+     */
+    public static void seccion(String message, Object... args) {
+        System.out.println();
+        System.out.println("==== " + MessageFormat.format(message, args) + " ====");
+    }
+
     public static void p(String message, Object... args) {
         System.out.print(MessageFormat.format(message, args));
     }

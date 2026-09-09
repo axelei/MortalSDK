@@ -35,7 +35,7 @@ public class TextRefsTest {
 
     private static void configure(Set<Integer> refs, Range... space) {
         App.config = new Config(3, Set.of(), Set.of(), new HashSet<>(Set.of(space)), Map.of(), Map.of(),
-                Set.of(), null, Set.of(), Set.of(), Set.of(), Set.of(), Map.of(), null, null, refs);
+                Set.of(), null, Set.of(), Set.of(), Set.of(), Set.of(), Map.of(), null, null, refs, null, Set.of());
     }
 
     /** Una ROM con un texto, un puntero absoluto que lo alcanza y un cmpi con su dirección. */

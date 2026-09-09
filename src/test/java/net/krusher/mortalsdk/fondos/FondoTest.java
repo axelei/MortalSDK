@@ -2,6 +2,7 @@ package net.krusher.mortalsdk.fondos;
 
 import net.krusher.mortalsdk.Bitmap;
 import net.krusher.mortalsdk.Png;
+import net.krusher.mortalsdk.Range;
 import net.krusher.mortalsdk.RncService;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -9,6 +10,7 @@ import org.junit.Test;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.util.List;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -93,7 +95,7 @@ public class FondoTest {
         for (Escenario e : Escenario.TODOS) {
             Fondo f = Fondo.cargar(carpetaFondos, e, rom);
             byte[] copia = rom.clone();
-            FondoService.Espacio espacio = new FondoService.Espacio(FondoService.ESPACIO_POR_DEFECTO);
+            FondoService.Espacio espacio = new FondoService.Espacio(List.of(Range.of(0x3F6800, 0x3FFF00)));
             FondoService.Resultado r = FondoService.inyectar(copia, f, espacio);
 
             // los tiles vuelven enteros
@@ -129,7 +131,7 @@ public class FondoTest {
         Escenario e = Escenario.porNumero(0);
         Fondo f = Fondo.cargar(carpetaFondos, e, rom);
         byte[] copia = rom.clone();
-        FondoService.inyectar(copia, f, new FondoService.Espacio(FondoService.ESPACIO_POR_DEFECTO));
+        FondoService.inyectar(copia, f, new FondoService.Espacio(List.of(Range.of(0x3F6800, 0x3FFF00))));
         // el bloque de tiles original sigue donde estaba, byte a byte
         byte[] originalTiles = RncService.unpack(rom, e.bloqueTiles());
         assertArrayEquals(originalTiles, RncService.unpack(copia, e.bloqueTiles()));
@@ -151,7 +153,7 @@ public class FondoTest {
         Escenario e = Escenario.porNumero(0);
         Fondo f = Fondo.cargar(carpetaFondos, e, rom);
         byte[] copia = rom.clone();
-        FondoService.Espacio espacio = new FondoService.Espacio("0x3F6800-0x3FFF00");
+        FondoService.Espacio espacio = new FondoService.Espacio(List.of(Range.of(0x3F6800, 0x3FFF00)));
         FondoService.inyectar(copia, f, espacio);
         try {
             FondoService.inyectar(copia, f, espacio);

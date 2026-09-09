@@ -1,9 +1,11 @@
 package net.krusher.mortalsdk.fondos;
 
+import net.krusher.mortalsdk.Range;
 import net.krusher.mortalsdk.RncService;
 import org.junit.Test;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.Random;
 
 import static org.junit.Assert.assertArrayEquals;
@@ -54,7 +56,7 @@ public class FondoServiceTest {
     @Test
     public void elEspacioSoloDaHuecosVaciosYAvisaCuandoSeAcaba() throws IOException {
         byte[] rom = new byte[0x400000];
-        FondoService.Espacio espacio = new FondoService.Espacio("0x3F6800-0x3F6900");
+        FondoService.Espacio espacio = new FondoService.Espacio(List.of(Range.of(0x3F6800, 0x3F6900)));
         int a = espacio.reservar(rom, 0x80);
         assertEquals(0x3F6800, a);
         int b = espacio.reservar(rom, 0x80);
@@ -71,7 +73,7 @@ public class FondoServiceTest {
     public void unHuecoOcupadoNoSeUsa() {
         byte[] rom = new byte[0x400000];
         rom[0x3F6810] = 0x42;
-        FondoService.Espacio espacio = new FondoService.Espacio("0x3F6800-0x3F6900");
+        FondoService.Espacio espacio = new FondoService.Espacio(List.of(Range.of(0x3F6800, 0x3F6900)));
         try {
             espacio.reservar(rom, 0x80);
             fail("tendría que haber avisado de que el hueco está ocupado");

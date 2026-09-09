@@ -158,6 +158,56 @@ Los samples PCM se extraen a WAV. No hay que configurarlos: se busca en la ROM l
 
 La tabla son entradas de ocho bytes: identificador (1), dirección del PCM (3), longitud (2) y velocidad de reproducción (2). El PCM es de 8 bits con signo; WAV lo guarda sin signo, así que la conversión es un XOR con `0x80` en los dos sentidos.
 
+#### Fondos de combate
+
+Los fondos de los combates no son pantallas de 40x28 como las de arriba. En el hack de Arcade Edition, la
+rutina de `0x504` salta según el escenario que toque a un cargador propio de cada uno, que descomprime sus
+tiles a la memoria de vídeo desde el índice que hay en `$ACBE` y sus mapas a la RAM para copiarlos por trozos
+a los dos planos, que son de 128x32 casillas. Encima hay tiles que el juego reescribe mientras se juega, que
+son las animaciones, y dos líneas de paleta por escenario.
+
+Se configuran con dos propiedades. La primera dice dónde está la carpeta con un subdirectorio por escenario; si
+se deja en blanco, los fondos ni se miran:
+
+```properties
+fondos=fondos
+fondosSpace=0x2D6C90,0x2D9FF0#0x2DC940,0x2DFF00
+```
+
+`fondosSpace` son los huecos de la ROM donde caben los tiles, los mapas y la rutina de carga de cada fondo que
+se haya editado: entre 11 y 18 KB por escenario. Va aparte de `spaceRanges` para que no se pisen con lo que
+reparten los textos.
+
+Al extraer se rehacen, desde los volcados y la ROM, los ficheros con los que se trabaja: los dos planos
+montados, la hoja de tiles, los mapas, la paleta y los fotogramas de las animaciones. Lo que ya haya tocado el
+editor no se toca, que rehacerlo se llevaría por delante lo pintado.
+
+Al inyectar entran sólo los escenarios que el editor haya guardado. No se toca ningún bloque ni ninguna rutina
+original: en el espacio libre van una rutina nueva de 126 bytes que llama a la de siempre y carga lo nuestro
+encima, el bloque de tiles y los dos mapas completos, y lo único que se parchea es la entrada de ese escenario
+en la tabla de `0x510`. Las animaciones y las paletas, que son datos en crudo, se reescriben en su sitio.
+
+El límite de tiles de cada escenario es donde empiezan los del marcador (`0x4D1`): quedan entre 751 y 822 según
+el escenario, y algunos vienen casi llenos.
+
+Los volcados de la memoria de vídeo (`raw/vram.bin` y compañía) no salen de aquí, sino del emulador, porque los
+mapas completos de los planos no están tal cual en la ROM: el juego los arma copiando trozos. Van con los datos
+del proyecto, junto al guion que los saca.
+
+#### El editor
+
+Para pintarlos hay una ventana aparte, que enseña el plano con la rejilla de casillas y el número de tile de
+cada una, el banco de tiles numerado con los libres marcados, y deja cambiarle el tile a una casilla, voltearlo,
+cambiarle la línea de paleta o darle un tile propio para pintarlo sin tocar las demás casillas que compartían el
+suyo. Las animaciones se editan aparte, fotograma a fotograma.
+
+```
+MortalSDK fondos "fondos" "mortal kombat.bin"
+```
+
+Lo que guarda es lo que luego mete `i` en la ROM: el editor pinta y guarda, y la ROM la hace la inyección de
+siempre.
+
 ### Inyección:
 
 `MortalSDK i "mortal kombat.bin" [configuracion.properties]`
@@ -271,6 +321,7 @@ Sólo necesitas ejecutar: `mvn clean package`. En la carpeta `dist` tendrás el 
 
 ## Cambios recientes
 
+- Los fondos de los combates se extraen y se inyectan con `x` e `i`, con las propiedades `fondos` y `fondosSpace`, y se pintan con el editor que abre `MortalSDK fondos`.
 - La propiedad `romName` le pone nombre a la ROM en los dos campos de la cabecera, lo último de la inyección.
 - Con la propiedad `fixedTexts` se sacan al fichero de textos los campos de tamaño fijo, como los nombres de la cabecera de Mega Drive, y así se le puede cambiar el nombre a la ROM.
 - Al rastrear textos, saltarse un byte corta el texto: antes se pegaban los de un lado y otro de una zona saltada.

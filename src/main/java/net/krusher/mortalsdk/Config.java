@@ -26,6 +26,9 @@ import java.util.Set;
  *                   cabecera de Mega Drive
  * @param codePatches parches sueltos de bytes sobre el código, por dirección. Para cambios finos que no
  *                    tienen otra propiedad, como anular una condición que sobra
+ * @param fondos   carpeta con los fondos de combate de cada escenario. Si está en blanco no se tocan
+ * @param fondosSpace zonas de la ROM donde caben los tiles, los mapas y la rutina de carga de cada fondo que se
+ *                    haya editado. Va aparte de {@code spaceRanges} para que no se pisen
  * @param romName  el nombre que se le pone a la ROM en la cabecera, si se quiere
  * @param textRefs direcciones de la ROM donde hay una palabra de 16 bits que es la direccion de un
  *                 texto, y que por tanto hay que rehacer si ese texto acaba en otro sitio. El juego se
@@ -50,7 +53,9 @@ public record Config(int minChars,
                      Map<Integer, byte[]> codePatches,
                      String romName,
                      String ipsBase,
-                     Set<Integer> textRefs) {
+                     Set<Integer> textRefs,
+                     String fondos,
+                     Set<Range> fondosSpace) {
 
     private static final int DEFAULT_MIN_CHARS = 5;
 
@@ -59,7 +64,7 @@ public record Config(int minChars,
 
     public Config() {
         this(DEFAULT_MIN_CHARS, Set.of(), Set.of(), new HashSet<>(), Map.of(), Map.of(), Set.of(), null,
-                Set.of(), Set.of(), Set.of(), Set.of(), Map.of(), null, null, Set.of());
+                Set.of(), Set.of(), Set.of(), Set.of(), Map.of(), null, null, Set.of(), null, Set.of());
     }
 
     public static Config getInstance(String fileName) throws IOException {
@@ -87,8 +92,10 @@ public record Config(int minChars,
         String romName = properties.getProperty("romName");
         String ipsBase = properties.getProperty("ipsBase");
         Set<Integer> textRefs = parseAddresses(properties.getProperty("textRefs"));
+        String fondos = properties.getProperty("fondos");
+        Set<Range> fondosSpace = parseRanges(properties.getProperty("fondosSpace"));
         return new Config(minChars, textRanges, bins, spaceRanges, palettes, scenes, texts, intro, introSpace,
-                codeSpace, skipRoutines, fixedTexts, codePatches, romName, ipsBase, textRefs);
+                codeSpace, skipRoutines, fixedTexts, codePatches, romName, ipsBase, textRefs, fondos, fondosSpace);
     }
 
     /**
