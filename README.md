@@ -321,6 +321,7 @@ Sólo necesitas ejecutar: `mvn clean package`. En la carpeta `dist` tendrás el 
 
 ## Cambios recientes
 
+- El hueco de un bloque que no cabe se pide sólo cuando hay un puntero que actualizar. Antes se reservaba antes de saberlo, y el sitio apartado para un bloque que luego no se movía se lo quitaba al siguiente que sí podía moverse; en una ROM con el espacio justo eso dejaba fuera bloques que cabían de sobra.
 - Los fondos de los combates se extraen y se inyectan con `x` e `i`, con las propiedades `fondos` y `fondosSpace`, y se pintan con el editor que abre `MortalSDK fondos`.
 - La propiedad `romName` le pone nombre a la ROM en los dos campos de la cabecera, lo último de la inyección.
 - Con la propiedad `fixedTexts` se sacan al fichero de textos los campos de tamaño fijo, como los nombres de la cabecera de Mega Drive, y así se le puede cambiar el nombre a la ROM.

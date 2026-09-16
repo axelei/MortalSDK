@@ -191,7 +191,12 @@ public class BlockService {
                 name, compressedData.length, originalSize);
         // se busca en la ROM original, para que lo ya inyectado no altere la búsqueda
         Integer pointer = TexticleService.findPointerAddress(address, originalData);
-        Integer newAddress = TexticleService.getNewAddress(compressedData.length);
+        // el hueco se pide sólo si hay puntero: reservarlo antes de saberlo dejaba apartado un sitio que
+        // luego no se escribía, y en una ROM con el espacio justo eso se lleva por delante al bloque
+        // siguiente que sí se podía mover
+        Integer newAddress = Objects.isNull(pointer)
+                ? null
+                : TexticleService.getNewAddress(compressedData.length);
         if (Objects.nonNull(pointer) && Objects.nonNull(newAddress)
                 && newAddress + compressedData.length <= fileData.length) {
             Log.pnl("Se inyectará en la dirección {0}.", toHexStringPadded(newAddress));
