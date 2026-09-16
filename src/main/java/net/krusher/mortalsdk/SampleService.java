@@ -245,6 +245,12 @@ public final class SampleService {
      * vecinas, en cuanto una sola cambia se llevan todas a espacio libre, cada una con sus bytes; las que no
      * se han tocado se copian tal cual de la ROM original. Al final se suelta el tramo entero, porque ya no
      * lo apunta nadie.
+     * <p>
+     * Si no hay sitio para todas, en vez de dejar el tramo como estaba se mete la más larga que quepa en él,
+     * al principio, y las demás entradas se quedan donde estaban: pasan a ser ventanas del sonido nuevo. No
+     * suena exacto —la que empezaba a la mitad del sonido viejo cae en otro punto del nuevo, y la que era más
+     * larga se lleva por delante lo que quede detrás—, pero el tramo entero deja de ser el original, que es
+     * lo que se quiere cuando el sonido nuevo es lo importante y no cuadrar cada recorte.
      */
     private static void injectGroup(List<Sample> group, Map<Integer, File> files, byte[] fileData,
                                     byte[] originalData, Set<Integer> moved) throws IOException {
@@ -306,7 +312,15 @@ public final class SampleService {
             }
             Integer offset = TexticleService.getNewAddress(pcm.length, BANK_SIZE);
             if (Objects.isNull(offset) || offset + pcm.length > fileData.length) {
-                Log.pnl("No hay espacio libre para separarlos, se dejan como estaban y sonarán mezclados.");
+                Log.pnl("No hay espacio libre para separarlos.");
+                // lo que se hubiera reservado para las anteriores no se va a escribir: se devuelve, que si
+                // no se queda apartado un hueco que no usa nadie
+                for (int i = 0; i < offsets.size(); i++) {
+                    if (offsets.get(i) >= to || offsets.get(i) < from) {
+                        TexticleService.freeSpace(offsets.get(i), pcms.get(i).length);
+                    }
+                }
+                injectBiggest(group, pcms, rates, fileData, from, to, moved);
                 return;
             }
             offsets.add(offset);
@@ -326,6 +340,44 @@ public final class SampleService {
         if (rest < to) {
             TexticleService.freeSpace(rest, to - rest);
         }
+    }
+
+    /**
+     * El recurso de cuando el grupo no cabe separado: se escribe al principio del tramo el sonido nuevo más
+     * largo de los que quepan, y su entrada pasa a ser el tramo entero desde el principio. Las demás no se
+     * tocan, así que siguen leyendo el trozo de siempre, que ahora es del sonido nuevo.
+     */
+    private static void injectBiggest(List<Sample> group, List<byte[]> pcms, List<Integer> rates,
+                                      byte[] fileData, int from, int to, Set<Integer> moved) {
+        int best = -1;
+        for (int i = 0; i < pcms.size(); i++) {
+            if (pcms.get(i).length <= to - from && (best < 0 || pcms.get(i).length > pcms.get(best).length)) {
+                best = i;
+            }
+        }
+        if (best < 0) {
+            Log.pnl("Y ninguna cabe entera en el tramo, así que se deja como estaba.");
+            return;
+        }
+        Sample sample = group.get(best);
+        byte[] pcm = pcms.get(best);
+        System.arraycopy(pcm, 0, fileData, from, pcm.length);
+        writeThreeBytes(fileData, sample.entryAddress() + 1, from);
+        writeWord(fileData, sample.entryAddress() + 4, pcm.length);
+        writeWord(fileData, sample.entryAddress() + 6, rates.get(best));
+        moved.add(sample.id());
+        List<String> rest = new ArrayList<>();
+        for (Sample other : group) {
+            if (other.id() != sample.id()) {
+                rest.add(String.format("%02x", other.id()));
+            }
+        }
+        Log.pnl(rest.size() == 1
+                        ? "  {0}: {1} bytes en {2}, y {3} se queda de ventana suya: sonará a lo que le haya "
+                          + "caído en su trozo."
+                        : "  {0}: {1} bytes en {2}, y {3} se quedan de ventanas suyas: sonarán a lo que les "
+                          + "haya caído en su trozo.",
+                String.format("%02x", sample.id()), pcm.length, toHex(from), String.join(", ", rest));
     }
 
     private static String ids(List<Sample> group) {

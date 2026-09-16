@@ -177,14 +177,38 @@ public class SampleServiceTest {
         assertArrayEquals(pcm, Arrays.copyOfRange(data, 0x1700, 0x1700 + 0x40));
     }
 
-    /** Sin sitio para separarlos se deja el tramo como estaba, mezclado pero sin estropear nada más. */
+    /**
+     * Sin sitio para separarlos, el tramo se lo queda el sonido nuevo más largo que quepa, y la otra entrada
+     * se queda donde estaba: pasa a ser una ventana suya. No suena exacto, pero deja de sonar el original.
+     */
     @Test
-    public void withoutRoomTheSharedRunIsLeftUntouched() throws Exception {
+    public void withoutRoomTheBiggestTakesTheSharedRun() throws Exception {
+        withSpace(Range.of(FREE, FREE + 8));
+        byte[] original = rom();
+        byte[] data = original.clone();
+        byte[] five = tone(100, 1);
+
+        SampleService.inject(new File[]{wav(5, SHARED, five), wav(6, SHARED, tone(100, 2))}, data, original);
+
+        // el tramo lleva el sonido nuevo, y la entrada que se ha metido lo apunta entero desde el principio
+        assertEquals(SHARED, offsetOf(data, 5));
+        assertEquals(100, lengthOf(data, 5));
+        assertArrayEquals(five, Arrays.copyOfRange(data, SHARED, SHARED + 100));
+        // la otra no se toca: sigue leyendo su trozo de siempre, que ahora es del sonido nuevo
+        assertEquals(SHARED, offsetOf(data, 6));
+        assertEquals(0x40, lengthOf(data, 6));
+        assertArrayEquals(Arrays.copyOfRange(five, 0, 0x40),
+                Arrays.copyOfRange(data, SHARED, SHARED + 0x40));
+    }
+
+    /** Si ninguna cabe entera en el tramo no se toca nada, que sería escribir fuera de lo que es suyo. */
+    @Test
+    public void withoutRoomAndTooBigNothingIsWritten() throws Exception {
         withSpace(Range.of(FREE, FREE + 8));
         byte[] original = rom();
         byte[] data = original.clone();
 
-        SampleService.inject(new File[]{wav(5, SHARED, tone(100, 1)), wav(6, SHARED, tone(100, 2))},
+        SampleService.inject(new File[]{wav(5, SHARED, tone(0x200, 1)), wav(6, SHARED, tone(0x200, 2))},
                 data, original);
 
         assertArrayEquals(original, data);
