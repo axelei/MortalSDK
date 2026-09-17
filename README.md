@@ -158,6 +158,12 @@ Los samples PCM se extraen a WAV. No hay que configurarlos: se busca en la ROM l
 
 La tabla son entradas de ocho bytes: identificador (1), dirección del PCM (3), longitud (2) y velocidad de reproducción (2). El PCM es de 8 bits con signo; WAV lo guarda sin signo, así que la conversión es un XOR con `0x80` en los dos sentidos.
 
+Nada impide que dos entradas describan ventanas del mismo trozo de PCM, y en esta ROM es lo normal: hay cinco que se reparten los 16 KB de `0x2CA000`, tres desde el principio con longitudes distintas —el mismo grito cortado a lo corto, a lo medio y entero— y dos que empiezan a la mitad y se llevan la cola. Así el juego guarda el sonido una vez y lo sirve de varias maneras.
+
+Por eso, en cuanto una de ellas cambia, no se puede escribir en el tramo sin estropear a las vecinas: la que decía «desde +5632, 10 KB» pasaría a empezar en mitad de cualquier cosa. Lo que se hace es separarlas, dándole a cada una su copia en el espacio libre. Sale caro: cinco ventanas de un tramo de 16 KB son cinco copias de 43 KB.
+
+Cuando no hay sitio para tantas copias, el tramo se lo queda el sonido nuevo más largo de los que quepan en él, escrito al principio, y las demás entradas se dejan como estaban, o sea convertidas en ventanas del sonido nuevo. No suena exacto —cada recorte cae donde cae—, pero el tramo entero deja de ser el original, que suele ser lo que se quiere. Si no cabe entera ni la más corta, ahí sí se deja todo como estaba, porque escribir de más sería pisar lo que hay detrás.
+
 #### Fondos de combate
 
 Los fondos de los combates no son pantallas de 40x28 como las de arriba. En el hack de Arcade Edition, la
@@ -321,6 +327,8 @@ Sólo necesitas ejecutar: `mvn clean package`. En la carpeta `dist` tendrás el 
 
 ## Cambios recientes
 
+- Cuando un grupo de samples que comparten bytes no cabe separado, el tramo se lo queda el sonido nuevo más largo que quepa en él y las demás entradas se quedan de ventanas suyas. Antes se dejaba el tramo como estaba y sonaba el original.
+- El hueco de un bloque que no cabe se pide sólo cuando hay un puntero que actualizar. Antes se reservaba antes de saberlo, y el sitio apartado para un bloque que luego no se movía se lo quitaba al siguiente que sí podía moverse; en una ROM con el espacio justo eso dejaba fuera bloques que cabían de sobra.
 - Los fondos de los combates se extraen y se inyectan con `x` e `i`, con las propiedades `fondos` y `fondosSpace`, y se pintan con el editor que abre `MortalSDK fondos`.
 - La propiedad `romName` le pone nombre a la ROM en los dos campos de la cabecera, lo último de la inyección.
 - Con la propiedad `fixedTexts` se sacan al fichero de textos los campos de tamaño fijo, como los nombres de la cabecera de Mega Drive, y así se le puede cambiar el nombre a la ROM.
